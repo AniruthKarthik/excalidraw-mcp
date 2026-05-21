@@ -1,0 +1,4 @@
+.venv
+scenes
+__pycache__
+excalidraw/__pycache__
