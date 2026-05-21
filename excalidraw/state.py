@@ -17,3 +17,6 @@ class SceneState:
 
     def delete(self, element_id):
         self.elements = [el for el in self.elements if el["id"] != element_id]
+
+    def all(self):
+        return self.elements

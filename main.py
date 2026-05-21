@@ -1,5 +1,5 @@
 from fastmcp import FastMCP
-from excalidraw.scene import save_scene
+from excalidraw.scene import save_scene, open_scene
 from excalidraw.elements import rect, text, arrow
 from excalidraw.state import SceneState
 
@@ -54,7 +54,12 @@ def move(element_id: str, x: int, y: int):
 
 @mcp.tool
 def save(name: str):
-    return save_scene(name, scene)
+    return save_scene(name, scene.all())
+
+
+@mcp.tool
+def preview():
+    return open_scene(scene.all())
 
 
 if __name__ == "__main__":
