@@ -2,6 +2,8 @@ from fastmcp import FastMCP
 from excalidraw.scene import save_scene, open_scene
 from excalidraw.elements import rect, text, arrow
 from excalidraw.state import SceneState
+from parser import parse_architecture
+from layout import horizontal_layout
 
 mcp = FastMCP("Excalidraw MCP")
 
@@ -60,6 +62,54 @@ def save(name: str):
 @mcp.tool
 def preview():
     return open_scene(scene.all())
+
+
+@mcp.tool
+def draw_architecture(prompt: str):
+
+    scene.clear()
+    nodes = parse_architecture(prompt)
+    positioned = horizontal_layout(nodes)
+    previous_center = None
+
+    for node in positioned:
+        rect_id = scene.add(
+            rect(
+                node["x"],
+                node["y"],
+                node["w"],
+                node["h"],
+            )
+        )
+
+        scene.add(
+            text(
+                node["x"] + 40,
+                node["y"] + 35,
+                node["label"],
+            )
+        )
+
+        current_center = (
+            node["x"],
+            node["y"] + 50,
+        )
+
+        if previous_center:
+            scene.add(
+                arrow(
+                    previous_center[0] + 200,
+                    previous_center[1],
+                    current_center[0],
+                    current_center[1],
+                )
+            )
+
+        previous_center = current_center
+
+    open_scene(scene.all())
+
+    return {"nodes": len(positioned), "status": "architecture drawn"}
 
 
 if __name__ == "__main__":
