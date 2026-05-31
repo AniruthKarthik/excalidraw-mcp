@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
-from excalidraw.scene import save_scene, open_scene
-from excalidraw.elements import rect, ellipse, diamond, text, arrow
+from excalidraw.scene import save_scene, load_scene, open_scene
+from excalidraw.elements import rect, ellipse, diamond, text, arrow, bind_text
 from excalidraw.state import SceneState
 from parser import parse_architecture
 from layout import horizontal_layout
@@ -21,7 +21,9 @@ def add_rectangle(x: int, y: int, w: int, h: int, label=""):
     rect_id = scene.add(r)
 
     if label:
-        scene.add(text(x + w // 4, y + h // 3, label))
+        t = text(x + w // 4, y + h // 3, label)
+        bind_text(t, r)
+        scene.add(t)
 
     return {"rectangle_id": rect_id}
 
@@ -32,7 +34,9 @@ def add_circle(x: int, y: int, size: int, label=""):
     circle_id = scene.add(c)
 
     if label:
-        scene.add(text(x + size // 4, y + size // 3, label))
+        t = text(x + size // 4, y + size // 3, label)
+        bind_text(t, c)
+        scene.add(t)
 
     return {"circle_id": circle_id}
 
@@ -43,7 +47,9 @@ def add_diamond(x: int, y: int, w: int, h: int, label=""):
     diamond_id = scene.add(d)
 
     if label:
-        scene.add(text(x + w // 4, y + h // 3, label))
+        t = text(x + w // 4, y + h // 3, label)
+        bind_text(t, d)
+        scene.add(t)
 
     return {"diamond_id": diamond_id}
 
@@ -59,13 +65,13 @@ def add_arrow(x: int, y: int, x2: int, y2: int):
 @mcp.tool
 def clear():
     scene.clear()
-    return "scene cleared"
+    return {"status": "scene cleared"}
 
 
 @mcp.tool
 def delete(element_id: str):
     scene.delete(element_id)
-    return "deleted"
+    return {"status": "deleted", "element_id": element_id}
 
 
 @mcp.tool
@@ -73,22 +79,39 @@ def move(element_id: str, x: int, y: int):
     el = scene.get(element_id)
 
     if not el:
-        return "not found"
+        return {"error": "not found", "element_id": element_id}
 
     el["x"] = x
     el["y"] = y
 
-    return "moved"
+    return {"status": "moved", "element_id": element_id, "x": x, "y": y}
 
 
 @mcp.tool
 def save(name: str):
-    return save_scene(name, scene.all())
+    path = save_scene(name, scene.all())
+    return {"path": path, "elements": len(scene.all()), "status": "saved"}
+
+
+@mcp.tool
+def load(name: str):
+    """Load a previously saved .excalidraw scene into the current session."""
+    elements = load_scene(name)
+    if elements is None:
+        return {"error": f"Scene '{name}' not found. Check scenes/ directory."}
+    scene.clear()
+    for el in elements:
+        scene.add(el)
+    return {"loaded": len(elements), "name": name, "status": "scene loaded"}
 
 
 @mcp.tool
 def preview():
-    return open_scene(scene.all())
+    elements = scene.all()
+    if not elements:
+        return {"error": "Scene is empty. Add some elements first.", "url": None}
+    url = open_scene(elements)
+    return {"url": url, "elements": len(elements), "status": "open this URL in your browser to preview"}
 
 
 @mcp.tool
@@ -101,15 +124,16 @@ def draw_architecture(prompt: str):
 
     for node in positioned:
         shape_factory = SHAPES.get(node["shape"], rect)
-        scene.add(shape_factory(node["x"], node["y"], node["w"], node["h"]))
+        shape_el = shape_factory(node["x"], node["y"], node["w"], node["h"])
+        scene.add(shape_el)
 
-        scene.add(
-            text(
-                node["x"] + (node["w"] // 4),
-                node["y"] + (node["h"] // 3),
-                node["label"],
-            )
+        text_el = text(
+            node["x"] + (node["w"] // 4),
+            node["y"] + (node["h"] // 3),
+            node["label"],
         )
+        bind_text(text_el, shape_el)
+        scene.add(text_el)
 
         current_center = (
             node["x"] + (node["w"] // 2),
@@ -128,9 +152,9 @@ def draw_architecture(prompt: str):
 
         previous_center = current_center
 
-    open_scene(scene.all())
+    url = open_scene(scene.all())
 
-    return {"nodes": len(positioned), "status": "architecture drawn"}
+    return {"nodes": len(positioned), "url": url, "status": "architecture drawn"}
 
 
 if __name__ == "__main__":

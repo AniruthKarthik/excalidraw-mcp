@@ -1,6 +1,5 @@
 import json
 import urllib.parse
-import webbrowser
 from pathlib import Path
 
 SCENE_DIR = Path("scenes")
@@ -13,7 +12,7 @@ def save_scene(name, elements):
         "version": 2,
         "source": "https://excalidraw.com",
         "elements": elements,
-        "appstate": {},
+        "appState": {},
         "files": {},
     }
 
@@ -25,19 +24,27 @@ def save_scene(name, elements):
     return str(path)
 
 
+def load_scene(name):
+    path = SCENE_DIR / f"{name}.excalidraw"
+    if not path.exists():
+        return None
+
+    with open(path) as f:
+        scene = json.load(f)
+
+    return scene.get("elements", [])
+
+
 def open_scene(elements):
     scene = {
         "type": "excalidraw",
         "version": 2,
         "source": "https://excalidraw.com",
         "elements": elements,
-        "appstate": {},
-        "files": {},
+        "appState": {},
     }
 
     encoded = urllib.parse.quote(json.dumps(scene))
 
     url = f"https://excalidraw.com/#json={encoded}"
-    webbrowser.open(url)
-
-    return "opened in browser"
+    return url

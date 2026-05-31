@@ -45,3 +45,16 @@ def arrow(x, y, x2, y2):
         "y": y,
         "points": [[0, 0], [x2 - x, y2 - y]],
     }
+
+
+def bind_text(text_el: dict, container_el: dict):
+    """Bind a text element as the label of a container shape."""
+    text_el["containerId"] = container_el["id"]
+
+    text_id = text_el["id"]
+    if container_el.get("boundElements") is None:
+        container_el["boundElements"] = []
+
+    # Avoid duplicates if bind_text is called multiple times
+    if not any(b["id"] == text_id for b in container_el["boundElements"]):
+        container_el["boundElements"].append({"type": "text", "id": text_id})
