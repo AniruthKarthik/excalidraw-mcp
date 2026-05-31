@@ -15,13 +15,52 @@ SHAPES = {
 }
 
 
+def _style_kwargs(
+    strokeColor: str | None = None,
+    backgroundColor: str | None = None,
+    fillStyle: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+    roughness: int | None = None,
+) -> dict:
+    """Collect non-None style keyword arguments into a dict."""
+    return {k: v for k, v in locals().items() if v is not None}
+
+
 @mcp.tool
-def add_rectangle(x: int, y: int, w: int, h: int, label=""):
-    r = rect(x, y, w, h)
+def add_rectangle(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    label: str = "",
+    strokeColor: str | None = None,
+    backgroundColor: str | None = None,
+    fillStyle: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+    roughness: int | None = None,
+):
+    """Add a rectangle to the scene.
+
+    Style parameters are optional — when omitted, Excalidraw defaults are used.
+    """
+    style = _style_kwargs(
+        strokeColor=strokeColor,
+        backgroundColor=backgroundColor,
+        fillStyle=fillStyle,
+        strokeWidth=strokeWidth,
+        strokeStyle=strokeStyle,
+        opacity=opacity,
+        roughness=roughness,
+    )
+    r = rect(x, y, w, h, **style)
     rect_id = scene.add(r)
 
     if label:
-        t = text(x + w // 4, y + h // 3, label)
+        t = text(x + w // 4, y + h // 3, label, **style)
         bind_text(t, r)
         scene.add(t)
 
@@ -29,12 +68,34 @@ def add_rectangle(x: int, y: int, w: int, h: int, label=""):
 
 
 @mcp.tool
-def add_circle(x: int, y: int, size: int, label=""):
-    c = ellipse(x, y, size, size)
+def add_circle(
+    x: int,
+    y: int,
+    size: int,
+    label: str = "",
+    strokeColor: str | None = None,
+    backgroundColor: str | None = None,
+    fillStyle: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+    roughness: int | None = None,
+):
+    """Add a circle (ellipse) to the scene."""
+    style = _style_kwargs(
+        strokeColor=strokeColor,
+        backgroundColor=backgroundColor,
+        fillStyle=fillStyle,
+        strokeWidth=strokeWidth,
+        strokeStyle=strokeStyle,
+        opacity=opacity,
+        roughness=roughness,
+    )
+    c = ellipse(x, y, size, size, **style)
     circle_id = scene.add(c)
 
     if label:
-        t = text(x + size // 4, y + size // 3, label)
+        t = text(x + size // 4, y + size // 3, label, **style)
         bind_text(t, c)
         scene.add(t)
 
@@ -42,12 +103,35 @@ def add_circle(x: int, y: int, size: int, label=""):
 
 
 @mcp.tool
-def add_diamond(x: int, y: int, w: int, h: int, label=""):
-    d = diamond(x, y, w, h)
+def add_diamond(
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    label: str = "",
+    strokeColor: str | None = None,
+    backgroundColor: str | None = None,
+    fillStyle: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+    roughness: int | None = None,
+):
+    """Add a diamond to the scene."""
+    style = _style_kwargs(
+        strokeColor=strokeColor,
+        backgroundColor=backgroundColor,
+        fillStyle=fillStyle,
+        strokeWidth=strokeWidth,
+        strokeStyle=strokeStyle,
+        opacity=opacity,
+        roughness=roughness,
+    )
+    d = diamond(x, y, w, h, **style)
     diamond_id = scene.add(d)
 
     if label:
-        t = text(x + w // 4, y + h // 3, label)
+        t = text(x + w // 4, y + h // 3, label, **style)
         bind_text(t, d)
         scene.add(t)
 
@@ -55,27 +139,56 @@ def add_diamond(x: int, y: int, w: int, h: int, label=""):
 
 
 @mcp.tool
-def add_arrow(x: int, y: int, x2: int, y2: int):
-    a = arrow(x, y, x2, y2)
+def add_arrow(
+    x: int,
+    y: int,
+    x2: int,
+    y2: int,
+    label: str = "",
+    strokeColor: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+):
+    """Add an arrow between two points.
+
+    Optionally add a label (displayed as floating text near the arrow midpoint).
+    """
+    style = _style_kwargs(
+        strokeColor=strokeColor,
+        strokeWidth=strokeWidth,
+        strokeStyle=strokeStyle,
+        opacity=opacity,
+    )
+    a = arrow(x, y, x2, y2, **style)
     arrow_id = scene.add(a)
+
+    if label:
+        mid_x = (x + x2) // 2
+        mid_y = (y + y2) // 2
+        t = text(mid_x, mid_y, label, fontSize=14, **style)
+        scene.add(t)
 
     return {"arrow_id": arrow_id}
 
 
 @mcp.tool
 def clear():
+    """Remove all elements from the scene."""
     scene.clear()
     return {"status": "scene cleared"}
 
 
 @mcp.tool
 def delete(element_id: str):
+    """Remove a single element by its ID."""
     scene.delete(element_id)
     return {"status": "deleted", "element_id": element_id}
 
 
 @mcp.tool
 def move(element_id: str, x: int, y: int):
+    """Move an element to new (x, y) coordinates."""
     el = scene.get(element_id)
 
     if not el:
@@ -89,6 +202,7 @@ def move(element_id: str, x: int, y: int):
 
 @mcp.tool
 def save(name: str):
+    """Save the current scene to a .excalidraw file."""
     path = save_scene(name, scene.all())
     return {"path": path, "elements": len(scene.all()), "status": "saved"}
 
@@ -107,15 +221,49 @@ def load(name: str):
 
 @mcp.tool
 def preview():
+    """Generate an excalidraw.com URL to preview the scene in a browser.
+
+    Returns a clickable https://excalidraw.com/#json=... URL.
+    """
     elements = scene.all()
     if not elements:
         return {"error": "Scene is empty. Add some elements first.", "url": None}
     url = open_scene(elements)
-    return {"url": url, "elements": len(elements), "status": "open this URL in your browser to preview"}
+    return {
+        "url": url,
+        "elements": len(elements),
+        "status": "open this URL in your browser to preview",
+    }
 
 
 @mcp.tool
-def draw_architecture(prompt: str):
+def draw_architecture(
+    prompt: str,
+    strokeColor: str | None = None,
+    backgroundColor: str | None = None,
+    fillStyle: str | None = None,
+    strokeWidth: int | None = None,
+    strokeStyle: str | None = None,
+    opacity: int | None = None,
+    roughness: int | None = None,
+):
+    """Parse a natural-language prompt and auto-layout an architecture diagram.
+
+    Supports ``"shape: label"`` syntax where shape can be
+    ``rectangle``/``box``, ``circle``/``ellipse``, or ``diamond``.
+    Components are arranged horizontally with automatic connectors.
+
+    All style parameters are optional and apply globally to every element.
+    """
+    style = _style_kwargs(
+        strokeColor=strokeColor,
+        backgroundColor=backgroundColor,
+        fillStyle=fillStyle,
+        strokeWidth=strokeWidth,
+        strokeStyle=strokeStyle,
+        opacity=opacity,
+        roughness=roughness,
+    )
 
     scene.clear()
     nodes = parse_architecture(prompt)
@@ -124,13 +272,14 @@ def draw_architecture(prompt: str):
 
     for node in positioned:
         shape_factory = SHAPES.get(node["shape"], rect)
-        shape_el = shape_factory(node["x"], node["y"], node["w"], node["h"])
+        shape_el = shape_factory(node["x"], node["y"], node["w"], node["h"], **style)
         scene.add(shape_el)
 
         text_el = text(
             node["x"] + (node["w"] // 4),
             node["y"] + (node["h"] // 3),
             node["label"],
+            **style,
         )
         bind_text(text_el, shape_el)
         scene.add(text_el)
@@ -147,6 +296,7 @@ def draw_architecture(prompt: str):
                     previous_center[1],
                     current_center[0],
                     current_center[1],
+                    **style,
                 )
             )
 
