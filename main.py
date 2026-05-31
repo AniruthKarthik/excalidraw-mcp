@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 from excalidraw.scene import save_scene, open_scene
-from excalidraw.elements import rect, text, arrow
+from excalidraw.elements import rect, ellipse, diamond, text, arrow
 from excalidraw.state import SceneState
 from parser import parse_architecture
 from layout import horizontal_layout
@@ -8,6 +8,11 @@ from layout import horizontal_layout
 mcp = FastMCP("Excalidraw MCP")
 
 scene = SceneState()
+SHAPES = {
+    "rectangle": rect,
+    "ellipse": ellipse,
+    "diamond": diamond,
+}
 
 
 @mcp.tool
@@ -19,6 +24,28 @@ def add_rectangle(x: int, y: int, w: int, h: int, label=""):
         scene.add(text(x + w // 4, y + h // 3, label))
 
     return {"rectangle_id": rect_id}
+
+
+@mcp.tool
+def add_circle(x: int, y: int, size: int, label=""):
+    c = ellipse(x, y, size, size)
+    circle_id = scene.add(c)
+
+    if label:
+        scene.add(text(x + size // 4, y + size // 3, label))
+
+    return {"circle_id": circle_id}
+
+
+@mcp.tool
+def add_diamond(x: int, y: int, w: int, h: int, label=""):
+    d = diamond(x, y, w, h)
+    diamond_id = scene.add(d)
+
+    if label:
+        scene.add(text(x + w // 4, y + h // 3, label))
+
+    return {"diamond_id": diamond_id}
 
 
 @mcp.tool
@@ -73,32 +100,26 @@ def draw_architecture(prompt: str):
     previous_center = None
 
     for node in positioned:
-        rect_id = scene.add(
-            rect(
-                node["x"],
-                node["y"],
-                node["w"],
-                node["h"],
-            )
-        )
+        shape_factory = SHAPES.get(node["shape"], rect)
+        scene.add(shape_factory(node["x"], node["y"], node["w"], node["h"]))
 
         scene.add(
             text(
-                node["x"] + 40,
-                node["y"] + 35,
+                node["x"] + (node["w"] // 4),
+                node["y"] + (node["h"] // 3),
                 node["label"],
             )
         )
 
         current_center = (
-            node["x"],
-            node["y"] + 50,
+            node["x"] + (node["w"] // 2),
+            node["y"] + (node["h"] // 2),
         )
 
         if previous_center:
             scene.add(
                 arrow(
-                    previous_center[0] + 200,
+                    previous_center[0],
                     previous_center[1],
                     current_center[0],
                     current_center[1],

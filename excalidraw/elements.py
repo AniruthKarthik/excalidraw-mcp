@@ -1,17 +1,27 @@
 import uuid
 
 
-def rect(x: int, y: int, w: int, h: int):
-    rect_id = str(uuid.uuid4())
-
+def _base_shape(shape_type: str, x: int, y: int, w: int, h: int):
     return {
-        "id": rect_id,
-        "type": "rectangle",
+        "id": str(uuid.uuid4()),
+        "type": shape_type,
         "x": x,
         "y": y,
         "width": w,
         "height": h,
     }
+
+
+def rect(x: int, y: int, w: int, h: int):
+    return _base_shape("rectangle", x, y, w, h)
+
+
+def ellipse(x: int, y: int, w: int, h: int):
+    return _base_shape("ellipse", x, y, w, h)
+
+
+def diamond(x: int, y: int, w: int, h: int):
+    return _base_shape("diamond", x, y, w, h)
 
 
 def text(x: int, y: int, content: str):
