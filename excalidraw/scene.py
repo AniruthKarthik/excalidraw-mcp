@@ -1,72 +1,16 @@
 """Validated document persistence in an explicitly configured directory."""
 import json
-import math
 import os
 import re
 import stat
 import uuid
 from contextlib import contextmanager
-from copy import deepcopy
 
 from config import scene_directory
 from excalidraw.errors import SceneError
 
 
-def new_document(elements=None):
-    return {
-        "type": "excalidraw",
-        "version": 2,
-        "source": "https://excalidraw.com",
-        "elements": [] if elements is None else elements,
-        "appState": {},
-        "files": {},
-    }
-
-
-def _finite_number(value):
-    try:
-        return type(value) in (int, float) and math.isfinite(value)
-    except OverflowError:
-        return False
-
-
-def validate_document(document):
-    """Validate structural invariants while retaining unfamiliar imported fields."""
-    if not isinstance(document, dict) or document.get("type") != "excalidraw":
-        raise SceneError("Expected an Excalidraw document")
-    if type(document.get("version")) is not int or document["version"] != 2:
-        raise SceneError("Only Excalidraw document version 2 is supported")
-    if not isinstance(document.get("elements"), list):
-        raise SceneError("Document elements must be a list")
-    for field in ("appState", "files"):
-        if not isinstance(document.get(field, {}), dict):
-            raise SceneError(f"Document {field} must be an object")
-    ids = set()
-    for element in document["elements"]:
-        if not isinstance(element, dict):
-            raise SceneError("Each element must be an object")
-        element_id = element.get("id")
-        if not isinstance(element_id, str) or not element_id.strip() or element_id in ids:
-            raise SceneError("Element IDs must be nonempty, unique strings")
-        ids.add(element_id)
-        if not isinstance(element.get("type"), str) or not element["type"].strip():
-            raise SceneError(f"Element {element_id} needs a type")
-        for field in ("x", "y", "width", "height"):
-            if field in ("width", "height") and field not in element:
-                continue
-            value = element.get(field)
-            if not _finite_number(value):
-                raise SceneError(f"Element {element_id} needs a finite {field}")
-            if field in ("width", "height") and value < 0:
-                raise SceneError(f"Element {element_id} has negative {field}")
-    try:
-        json.dumps(document, allow_nan=False)
-    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
-        raise SceneError("Document must contain finite JSON data") from exc
-    result = deepcopy(document)
-    result.setdefault("appState", {})
-    result.setdefault("files", {})
-    return result
+from excalidraw.models import new_document, validate_document
 
 
 def _filename(name):

@@ -1,5 +1,6 @@
 import uuid
 import random
+import time
 
 
 # Default style values that match Excalidraw's defaults
@@ -24,6 +25,9 @@ def _apply_style(el: dict, style_kwargs: dict):
             el[key] = DEFAULT_STYLE[key]
     # seed is required by Excalidraw for rendering
     el["seed"] = random.randint(1, 1000000)
+    el["version"] = 1
+    el["versionNonce"] = random.randrange(1, 2**31)
+    el["updated"] = time.time_ns() // 1_000_000
 
 
 def _base_shape(shape_type: str, x: int, y: int, w: int, h: int, **style):
