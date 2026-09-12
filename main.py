@@ -1,5 +1,7 @@
 from fastmcp import FastMCP
-from excalidraw.scene import save_scene, load_scene, open_scene
+from fastmcp.exceptions import ToolError
+from excalidraw.scene import save_scene, load_scene, new_document
+from excalidraw.errors import SceneError
 from excalidraw.elements import rect, ellipse, diamond, text, arrow, bind_text
 from excalidraw.state import SceneState
 from parser import parse_architecture
@@ -201,39 +203,34 @@ def move(element_id: str, x: int, y: int):
 
 
 @mcp.tool
-def save(name: str):
-    """Save the current scene to a .excalidraw file."""
-    path = save_scene(name, scene.all())
-    return {"path": path, "elements": len(scene.all()), "status": "saved"}
+def save(name: str, overwrite: bool = False):
+    """Save under a simple name (no extension). Set overwrite=true to replace an existing file."""
+    document = scene.document()
+    try:
+        path = save_scene(name, document, overwrite=overwrite)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return {"path": path, "elements": len(document["elements"]), "status": "saved"}
 
 
 @mcp.tool
 def load(name: str):
-    """Load a previously saved .excalidraw scene into the current session."""
-    elements = load_scene(name)
-    if elements is None:
-        return {"error": f"Scene '{name}' not found. Check scenes/ directory."}
-    scene.clear()
-    for el in elements:
-        scene.add(el)
-    return {"loaded": len(elements), "name": name, "status": "scene loaded"}
+    """Replace the current scene with a saved document; invalid files leave it unchanged."""
+    try:
+        document = load_scene(name)
+        scene.replace(document)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    return {"loaded": len(document["elements"]), "name": name, "status": "scene loaded"}
 
 
 @mcp.tool
 def preview():
-    """Generate an excalidraw.com URL to preview the scene in a browser.
-
-    Returns a clickable https://excalidraw.com/#json=... URL.
-    """
-    elements = scene.all()
-    if not elements:
-        return {"error": "Scene is empty. Add some elements first.", "url": None}
-    url = open_scene(elements)
-    return {
-        "url": url,
-        "elements": len(elements),
-        "status": "open this URL in your browser to preview",
-    }
+    """Preview is unavailable. Save a .excalidraw file and open it in Excalidraw."""
+    raise ToolError(
+        "Browser preview is not implemented. Use save(name), then open the saved "
+        ".excalidraw file in Excalidraw. The returned path is on the server."
+    )
 
 
 @mcp.tool
@@ -247,7 +244,7 @@ def draw_architecture(
     opacity: int | None = None,
     roughness: int | None = None,
 ):
-    """Parse a natural-language prompt and auto-layout an architecture diagram.
+    """Replace the scene with a diagram from comma/newline-separated components.
 
     Supports ``"shape: label"`` syntax where shape can be
     ``rectangle``/``box``, ``circle``/``ellipse``, or ``diamond``.
@@ -265,15 +262,20 @@ def draw_architecture(
         roughness=roughness,
     )
 
-    scene.clear()
     nodes = parse_architecture(prompt)
+    if not nodes or any(not node["label"].strip() for node in nodes):
+        raise ToolError(
+            "Provide at least one nonempty component label, "
+            "e.g. 'box: API, box: Database'"
+        )
     positioned = horizontal_layout(nodes)
+    elements = []
     previous_center = None
 
     for node in positioned:
         shape_factory = SHAPES.get(node["shape"], rect)
         shape_el = shape_factory(node["x"], node["y"], node["w"], node["h"], **style)
-        scene.add(shape_el)
+        elements.append(shape_el)
 
         text_el = text(
             node["x"] + (node["w"] // 4),
@@ -282,7 +284,7 @@ def draw_architecture(
             **style,
         )
         bind_text(text_el, shape_el)
-        scene.add(text_el)
+        elements.append(text_el)
 
         current_center = (
             node["x"] + (node["w"] // 2),
@@ -290,7 +292,7 @@ def draw_architecture(
         )
 
         if previous_center:
-            scene.add(
+            elements.append(
                 arrow(
                     previous_center[0],
                     previous_center[1],
@@ -302,9 +304,14 @@ def draw_architecture(
 
         previous_center = current_center
 
-    url = open_scene(scene.all())
-
-    return {"nodes": len(positioned), "url": url, "status": "architecture drawn"}
+    try:
+        scene.replace(new_document(elements))
+    except SceneError as exc:
+        raise ToolError(str(exc)) from exc
+    return {
+        "nodes": len(positioned), "url": None, "status": "architecture drawn",
+        "next_step": "Use save(name), then open the saved .excalidraw file in Excalidraw.",
+    }
 
 
 if __name__ == "__main__":
