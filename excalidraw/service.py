@@ -1,6 +1,7 @@
 """Scene operations independent of MCP transport and server globals."""
 from excalidraw.elements import arrow, bind_text, diamond, ellipse, rect, text
 from excalidraw.errors import SceneError
+from excalidraw.document import serialize_document
 from excalidraw.models import _finite_number, new_document
 from excalidraw.scene import load_scene, save_scene
 from excalidraw.state import SceneState
@@ -142,6 +143,10 @@ class SceneService:
         path = save_scene(name, document, overwrite=overwrite)
         return {"path": path, "elements": len(document["elements"]), "status": "saved"}
 
+    def export_scene(self):
+        """Export a detached snapshot without filesystem access."""
+        return serialize_document(self.state.document())
+
     def load(self, name):
         revision = self.state.revision
         document = load_scene(name)
@@ -150,8 +155,8 @@ class SceneService:
 
     def preview(self):
         raise SceneError(
-            "Browser preview is not implemented. Use save(name), then open the saved "
-            ".excalidraw file in Excalidraw. The returned path is on the server."
+            "Browser preview is not implemented. Use save(name) for a server-local file "
+            "or export_scene() for an embedded document, then import it into Excalidraw."
         )
 
     def draw_architecture(self, prompt, **style):

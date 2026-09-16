@@ -3,7 +3,7 @@ import random
 import time
 
 
-# Default style values that match Excalidraw's defaults
+# Explicit project defaults; never depend on the editor's current UI defaults.
 DEFAULT_STYLE = {
     "strokeColor": "#1e1e1e",
     "backgroundColor": "transparent",
@@ -28,6 +28,8 @@ def _apply_style(el: dict, style_kwargs: dict):
     el["version"] = 1
     el["versionNonce"] = random.randrange(1, 2**31)
     el["updated"] = time.time_ns() // 1_000_000
+    el.update(index=None, groupIds=[], frameId=None, boundElements=[], link=None,
+              locked=False, isDeleted=False, roundness=None)
 
 
 def _base_shape(shape_type: str, x: int, y: int, w: int, h: int, **style):
@@ -63,8 +65,15 @@ def text(x: int, y: int, content: str, fontSize: int = 20, **style):
         "y": y,
         "text": content,
         "fontSize": fontSize,
-        "width": len(content) * fontSize * 0.6,
-        "height": fontSize * 1.5,
+        "width": max(map(len, content.split("\n"))) * fontSize * 0.6,
+        "height": len(content.split("\n")) * fontSize * 1.25,
+        "fontFamily": 2,
+        "lineHeight": 1.25,
+        "textAlign": "left",
+        "verticalAlign": "top",
+        "originalText": content,
+        "autoResize": True,
+        "containerId": None,
     }
     _apply_style(el, style)
     return el
@@ -77,6 +86,14 @@ def arrow(x, y, x2, y2, **style):
         "x": x,
         "y": y,
         "points": [[0, 0], [x2 - x, y2 - y]],
+        "width": abs(x2 - x),
+        "height": abs(y2 - y),
+        "startBinding": None,
+        "endBinding": None,
+        "startArrowhead": None,
+        "endArrowhead": "arrow",
+        "lastCommittedPoint": None,
+        "elbowed": False,
     }
     _apply_style(el, style)
     return el
@@ -85,6 +102,8 @@ def arrow(x, y, x2, y2, **style):
 def bind_text(text_el: dict, container_el: dict):
     """Bind a text element as the label of a container shape."""
     text_el["containerId"] = container_el["id"]
+    text_el["textAlign"] = "center"
+    text_el["verticalAlign"] = "middle"
 
     text_id = text_el["id"]
     if container_el.get("boundElements") is None:

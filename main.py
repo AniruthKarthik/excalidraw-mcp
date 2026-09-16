@@ -1,7 +1,11 @@
 """MCP adapters; each server owns an explicit scene service."""
+from hashlib import sha256
+
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from mcp.types import EmbeddedResource, TextResourceContents
 
+from excalidraw.document import MIME_TYPE
 from excalidraw.service import SceneService
 
 
@@ -161,6 +165,20 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def save(name: str, overwrite: bool = False):
         """Save a consistent snapshot. Set overwrite=true to replace an existing file."""
         return invoke(service.save, name, overwrite=overwrite)
+
+    @mcp.tool
+    def export_scene():
+        """Return an embedded .excalidraw document for the client to save/import. No file is written."""
+        payload = invoke(service.export_scene)
+        snapshot_id = sha256(payload.encode("utf-8")).hexdigest()
+        return EmbeddedResource(
+            type="resource",
+            resource=TextResourceContents(
+                uri=f"excalidraw://export/{snapshot_id}/scene.excalidraw",
+                mimeType=MIME_TYPE,
+                text=payload,
+            ),
+        )
 
 
     @mcp.tool

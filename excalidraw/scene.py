@@ -8,9 +8,8 @@ from contextlib import contextmanager
 
 from config import scene_directory
 from excalidraw.errors import SceneError
-
-
-from excalidraw.models import new_document, validate_document
+from excalidraw.document import normalize_document, serialize_document
+from excalidraw.models import new_document
 
 
 def _filename(name):
@@ -50,8 +49,7 @@ def _check_target(fd, filename):
 
 def save_scene(name, document, overwrite=False):
     filename = _filename(name)
-    document = validate_document(document)
-    payload = json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2)
+    payload = serialize_document(document)
     try:
         with _directory(create=True) as (root, directory_fd):
             if _check_target(directory_fd, filename) and not overwrite:
@@ -95,7 +93,7 @@ def load_scene(name):
                 if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
                     raise SceneError("Scene target must be a regular file")
                 document = json.load(stream)
-        return validate_document(document)
+        return normalize_document(document)
     except FileNotFoundError as exc:
         raise SceneError(f"Scene '{name}' not found") from exc
     except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:

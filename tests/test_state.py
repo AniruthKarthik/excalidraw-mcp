@@ -146,7 +146,7 @@ class StateTests(unittest.TestCase):
         first = asyncio.run(tools(create_server()))
         second = asyncio.run(tools(create_server()))
         self.assertEqual(set(first), {"add_rectangle", "add_circle", "add_diamond", "add_arrow",
-                                     "clear", "delete", "move", "save", "load", "preview", "draw_architecture"})
+                                     "clear", "delete", "move", "save", "load", "preview", "draw_architecture", "export_scene"})
         result = first["add_rectangle"](0, 0, 10, 10, label="A")
         with self.assertRaisesRegex(ToolError, "not found"):
             second["move"](result["rectangle_id"], 20, 20)

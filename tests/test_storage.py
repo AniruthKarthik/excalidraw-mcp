@@ -50,8 +50,12 @@ class StorageTests(unittest.TestCase):
 
     def test_full_document_roundtrip(self):
         self.document["appState"] = {"viewBackgroundColor": "#123456"}
-        self.document["files"] = {"asset": {"id": "asset", "dataURL": "data:image/png;base64,example"}}
-        self.document["elements"].append({"id": "image", "type": "image", "x": 0, "y": 0, "fileId": "asset"})
+        self.document["files"] = {"asset": {
+            "id": "asset", "mimeType": "image/png", "created": 0,
+            "dataURL": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5s8AAAAASUVORK5CYII=",
+        }}
+        self.document["elements"].append({"id": "image", "type": "image", "x": 0, "y": 0,
+                                          "width": 1, "height": 1, "fileId": "asset"})
         self.document["custom"] = {"label": "日本語 café"}
         target = storage.save_scene("my_scene-1", self.document)
         self.assertEqual(Path(target), self.root / "my_scene-1.excalidraw")

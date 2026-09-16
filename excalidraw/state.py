@@ -6,7 +6,8 @@ from threading import RLock
 from typing import Callable, TypeVar
 
 from excalidraw.errors import SceneError
-from excalidraw.models import SceneDocument, new_document, normalize_relationships, validate_document
+from excalidraw.document import normalize_document
+from excalidraw.models import SceneDocument, new_document, validate_document
 
 T = TypeVar("T")
 
@@ -41,8 +42,7 @@ class SceneState:
             return deepcopy(self._document["elements"])
 
     def _commit(self, document, previous):
-        replacement = validate_document(document)
-        normalize_relationships(replacement)
+        replacement = normalize_document(document)
         old = {el["id"]: el for el in previous["elements"]}
         for el in replacement["elements"]:
             before = old.get(el["id"])

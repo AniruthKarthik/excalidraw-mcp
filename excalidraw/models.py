@@ -73,6 +73,8 @@ def validate_document(document: dict[str, Any]) -> SceneDocument:
         if not isinstance(element_id, str) or not element_id.strip() or element_id in ids:
             raise SceneError("Element IDs must be nonempty, unique strings")
         ids.add(element_id)
+        if "isDeleted" in element and type(element["isDeleted"]) is not bool:
+            raise SceneError(f"Element {element_id} has invalid isDeleted flag")
         if not isinstance(element.get("type"), str) or not element["type"].strip():
             raise SceneError(f"Element {element_id} needs a type")
         for field in ("x", "y", "width", "height"):
