@@ -10,13 +10,19 @@ Requires Python 3.12 or newer and `uv`:
 
 ```bash
 uv sync --locked
-uv run --locked main.py
+uv run --locked excalidraw-mcp
 ```
 
-Configure an MCP client to launch `uv run --locked main.py` from this repository.
+Configure an MCP client to launch `uv run --locked excalidraw-mcp` from this repository.
 Set `EXCALIDRAW_SCENE_DIR` to an absolute directory to change persistent storage.
-The default is `scenes/` beside `config.py`. Set `EXCALIDRAW_HISTORY_LIMIT` to a
-number from 1 through 100 to change the in-memory undo depth (default: 20).
+The default is the platform user-data directory (`$XDG_DATA_HOME/excalidraw-mcp/scenes`
+or `~/.local/share/excalidraw-mcp/scenes` on Linux, and
+`~/Library/Application Support/excalidraw-mcp/scenes` on macOS). Set
+`EXCALIDRAW_HISTORY_LIMIT` to a number from 1 through 100 to change the in-memory
+undo depth (default: 20).
+Persisted scenes are limited to 25 MiB and documents to 10,000 elements by
+default. Operators can tune those limits with `EXCALIDRAW_MAX_SCENE_BYTES` and
+`EXCALIDRAW_MAX_ELEMENTS`; see [docs/operations.md](docs/operations.md).
 
 ## Workflow
 
@@ -31,6 +37,9 @@ server exits.
 
 See [docs/tools.md](docs/tools.md) for tool contracts and
 [docs/graph-generation.md](docs/graph-generation.md) for layouts and examples.
+Deployment boundaries, configuration, backups, and release checks are covered in
+[docs/operations.md](docs/operations.md). Security reports follow
+[SECURITY.md](SECURITY.md).
 
 ## Tests
 

@@ -4,6 +4,7 @@ import math
 from copy import deepcopy
 from typing import Any, NotRequired, TypedDict
 
+from config import max_elements
 from excalidraw.errors import SceneError
 
 
@@ -62,6 +63,9 @@ def validate_document(document: dict[str, Any]) -> SceneDocument:
         raise SceneError("Only Excalidraw document version 2 is supported")
     if not isinstance(document.get("elements"), list):
         raise SceneError("Document elements must be a list")
+    element_limit = max_elements()
+    if len(document["elements"]) > element_limit:
+        raise SceneError(f"Document exceeds the configured limit of {element_limit} elements")
     for field in ("appState", "files"):
         if not isinstance(document.get(field, {}), dict):
             raise SceneError(f"Document {field} must be an object")

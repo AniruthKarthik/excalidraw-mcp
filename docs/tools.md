@@ -33,7 +33,8 @@ or approve calls.
 - `list_saved_scenes`: returns validated regular-file names in configured storage.
 - `save(name, overwrite=false)`: atomically writes a complete server-local file.
 - `load(name)`: validates and replaces the active scene. A concurrent edit makes
-  the operation fail instead of being overwritten.
+  the operation fail instead of being overwritten. Persisted byte and document
+  element limits are enforced before the active scene changes.
 - `export_scene`: embeds a complete `.excalidraw` snapshot in the result without
   writing to disk.
 - `draw_architecture`: compatibility shorthand for comma/newline components such

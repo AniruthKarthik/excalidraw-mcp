@@ -6,7 +6,7 @@ import stat
 import uuid
 from contextlib import contextmanager
 
-from config import scene_directory
+from config import max_scene_bytes, scene_directory
 from excalidraw.errors import SceneError
 from excalidraw.document import normalize_document, serialize_document
 from excalidraw.models import new_document
@@ -50,6 +50,10 @@ def _check_target(fd, filename):
 def save_scene(name, document, overwrite=False):
     filename = _filename(name)
     payload = serialize_document(document)
+    payload_size = len(payload.encode("utf-8"))
+    size_limit = max_scene_bytes()
+    if payload_size > size_limit:
+        raise SceneError(f"Scene exceeds the configured limit of {size_limit} bytes")
     try:
         with _directory(create=True) as (root, directory_fd):
             if _check_target(directory_fd, filename) and not overwrite:
@@ -90,8 +94,12 @@ def load_scene(name):
                 raise SceneError(f"Scene '{name}' not found")
             fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
             with os.fdopen(fd, "r", encoding="utf-8") as stream:
-                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode):
                     raise SceneError("Scene target must be a regular file")
+                size_limit = max_scene_bytes()
+                if info.st_size > size_limit:
+                    raise SceneError(f"Scene exceeds the configured limit of {size_limit} bytes")
                 document = json.load(stream)
         return normalize_document(document)
     except FileNotFoundError as exc:

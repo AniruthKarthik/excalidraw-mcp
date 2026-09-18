@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "excalidraw-mcp"
 version = "0.1.0"
@@ -5,5 +9,12 @@ description = "A local MCP server for creating and editing Excalidraw documents"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=3.3.1",
+    "fastmcp>=3.3.1,<4",
 ]
+
+[project.scripts]
+excalidraw-mcp = "main:run"
+
+[tool.setuptools]
+packages = ["excalidraw"]
+py-modules = ["config", "layout", "main", "parser"]

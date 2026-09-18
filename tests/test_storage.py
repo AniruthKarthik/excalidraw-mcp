@@ -32,8 +32,18 @@ class StorageTests(unittest.TestCase):
         self.assertFalse(self.root.exists())
 
     def test_default_directory_is_independent_of_working_directory(self):
-        with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(config.scene_directory(), Path(config.__file__).resolve().parent / "scenes")
+        with patch.dict(os.environ, {}, clear=True), patch.object(
+            config.Path, "home", return_value=Path("/home/tester")
+        ):
+            expected = (Path("/home/tester/Library/Application Support") if config.sys.platform == "darwin"
+                        else Path("/home/tester/.local/share"))
+            self.assertEqual(config.scene_directory(), expected / "excalidraw-mcp/scenes")
+
+    @unittest.skipIf(config.sys.platform == "darwin", "XDG data directories are not used on macOS")
+    def test_xdg_data_home_must_be_absolute(self):
+        with patch.dict(os.environ, {"XDG_DATA_HOME": "relative"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "XDG_DATA_HOME must be an absolute path"):
+                config.scene_directory()
 
     def test_relative_configuration_rejected(self):
         with patch.dict(os.environ, {"EXCALIDRAW_SCENE_DIR": "relative"}):

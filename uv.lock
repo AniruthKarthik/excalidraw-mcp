@@ -286,13 +286,13 @@ wheels = [
 [[package]]
 name = "excalidraw-mcp"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fastmcp", specifier = ">=3.3.1" }]
+requires-dist = [{ name = "fastmcp", specifier = ">=3.3.1,<4" }]
 
 [[package]]
 name = "exceptiongroup"
