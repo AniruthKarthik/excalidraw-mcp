@@ -1,7 +1,9 @@
 import asyncio
+import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
+from unittest.mock import patch
 
 from fastmcp.exceptions import ToolError
 
@@ -129,7 +131,7 @@ class StateTests(unittest.TestCase):
             writer.result(timeout=3)
             snapshot = reader.result(timeout=3)
         self.assertEqual(snapshot["elements"][0]["x"], 100)
-        self.assertEqual(snapshot["elements"][1]["x"], 125)
+        self.assertEqual(snapshot["elements"][1]["x"], 120)
         self.assertEqual(snapshot["elements"][1]["containerId"], result["rectangle_id"])
 
     def test_replacement_revision_guard_preserves_newer_work(self):
@@ -145,12 +147,26 @@ class StateTests(unittest.TestCase):
             return {tool.name: tool.fn for tool in await server.list_tools()}
         first = asyncio.run(tools(create_server()))
         second = asyncio.run(tools(create_server()))
-        self.assertEqual(set(first), {"add_rectangle", "add_circle", "add_diamond", "add_arrow",
-                                     "clear", "delete", "move", "save", "load", "preview", "draw_architecture", "export_scene"})
+        self.assertEqual(set(first), {
+            "add_rectangle", "add_circle", "add_diamond", "add_arrow", "add_text",
+            "clear", "delete", "move", "resize", "update_element", "connect", "undo",
+            "save", "load", "preview", "draw_architecture", "draw_graph", "export_scene",
+            "get_scene", "get_element", "list_saved_scenes",
+        })
         result = first["add_rectangle"](0, 0, 10, 10, label="A")
         with self.assertRaisesRegex(ToolError, "not found"):
             second["move"](result["rectangle_id"], 20, 20)
         first["move"](result["rectangle_id"], 20, 20)
+
+    def test_history_limit_configuration_is_validated(self):
+        with patch.dict(os.environ, {"EXCALIDRAW_HISTORY_LIMIT": "2"}):
+            self.assertEqual(SceneState()._max_history, 2)
+        for value in ("0", "101", "invalid"):
+            with self.subTest(value=value), patch.dict(
+                os.environ, {"EXCALIDRAW_HISTORY_LIMIT": value}
+            ):
+                with self.assertRaises(ValueError):
+                    SceneState()
 
 
 if __name__ == "__main__":

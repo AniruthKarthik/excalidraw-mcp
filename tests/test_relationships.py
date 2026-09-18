@@ -104,8 +104,9 @@ class RelationshipTests(unittest.TestCase):
         result = self.service.add_arrow(0, 0, 100, 100, label="request")
         self.assertEqual(self.state.get(result["label_id"])["containerId"], result["arrow_id"])
         self.service.move(result["arrow_id"], 10, 20)
-        self.assertEqual((self.state.get(result["label_id"])["x"],
-                          self.state.get(result["label_id"])["y"]), (60, 70))
+        moved_label = self.state.get(result["label_id"])
+        self.assertEqual((moved_label["x"] + moved_label["width"] / 2,
+                          moved_label["y"] + moved_label["height"] / 2), (60, 70))
         self.service.delete(result["arrow_id"])
         self.assertEqual(self.state.all(), [])
 

@@ -5,6 +5,7 @@ from copy import deepcopy
 from threading import RLock
 from typing import Callable, TypeVar
 
+from config import history_limit
 from excalidraw.errors import SceneError
 from excalidraw.document import normalize_document
 from excalidraw.models import SceneDocument, new_document, validate_document
@@ -13,12 +14,16 @@ T = TypeVar("T")
 
 
 class SceneState:
-    def __init__(self):
+    def __init__(self, max_history=None):
         self._lock = RLock()
         self._document = new_document()
         self._index = {}
         self._revision = 0
         self._editing = False
+        self._max_history = history_limit() if max_history is None else max_history
+        if not 1 <= self._max_history <= 100:
+            raise ValueError("max_history must be between 1 and 100")
+        self._history = []
 
     @property
     def revision(self):
@@ -41,8 +46,19 @@ class SceneState:
         with self._lock:
             return deepcopy(self._document["elements"])
 
-    def _commit(self, document, previous):
+    @property
+    def history_depth(self):
+        with self._lock:
+            return len(self._history)
+
+    def _remember(self, document):
+        self._history.append(deepcopy(document))
+        del self._history[:-self._max_history]
+
+    def _commit(self, document, previous, remember=True):
         replacement = normalize_document(document)
+        if replacement == previous:
+            return False
         old = {el["id"]: el for el in previous["elements"]}
         for el in replacement["elements"]:
             before = old.get(el["id"])
@@ -55,9 +71,12 @@ class SceneState:
                     time.time_ns() // 1_000_000,
                     (updated if type(updated) is int else 0) + 1,
                 )
+        if remember:
+            self._remember(previous)
         self._document = replacement
         self._index = {el["id"]: el for el in replacement["elements"]}
         self._revision += 1
+        return True
 
     def replace(self, document, expected_revision=None):
         with self._lock:
@@ -65,9 +84,13 @@ class SceneState:
                 raise SceneError("Nested scene mutations are not supported")
             if expected_revision is not None and self._revision != expected_revision:
                 raise SceneError("Scene changed while replacement was being prepared; retry the operation")
-            # An imported document keeps its metadata, except elements repaired
-            # during relationship normalization, which receive a version bump.
-            self._commit(document, validate_document(document))
+            replacement = normalize_document(document)
+            if replacement == self._document:
+                return
+            self._remember(self._document)
+            self._document = replacement
+            self._index = {el["id"]: el for el in replacement["elements"]}
+            self._revision += 1
 
     def apply(self, operation: Callable[[SceneDocument], T]) -> T:
         """Apply a callback to a private draft. Exceptions roll back all edits."""
@@ -98,3 +121,16 @@ class SceneState:
             if self._editing:
                 raise SceneError("Nested scene mutations are not supported")
             self._commit(new_document(), self._document)
+
+    def undo(self):
+        with self._lock:
+            if self._editing:
+                raise SceneError("Nested scene mutations are not supported")
+            if not self._history:
+                raise SceneError("Nothing to undo")
+            previous = self._history.pop()
+            self._document = normalize_document(previous)
+            self._index = {el["id"]: el for el in self._document["elements"]}
+            self._revision += 1
+            return {"status": "undone", "revision": self._revision,
+                    "history_depth": len(self._history)}

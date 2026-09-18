@@ -12,7 +12,7 @@ SHAPE_ALIASES = {
 
 
 def parse_architecture(prompt: str):
-    """Parse a loose architecture prompt into labeled shape nodes."""
+    """Parse the documented comma/newline component shorthand."""
 
     parts = [
         part.strip()
@@ -22,7 +22,7 @@ def parse_architecture(prompt: str):
 
     nodes = []
 
-    for part in parts:
+    for index, part in enumerate(parts):
         cleaned = part.lstrip("-* ").strip()
         shape = "rectangle"
         label = cleaned
@@ -40,6 +40,7 @@ def parse_architecture(prompt: str):
                 label = words[1].strip()
 
         nodes.append({
+            "id": f"node-{index + 1}",
             "label": label,
             "shape": shape,
         })

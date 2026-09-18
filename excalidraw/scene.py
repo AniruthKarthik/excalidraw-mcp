@@ -100,3 +100,19 @@ def load_scene(name):
         raise SceneError("Scene is not a valid UTF-8 JSON document") from exc
     except OSError as exc:
         raise SceneError(f"Could not load scene: {exc.strerror}") from exc
+
+
+def list_scenes():
+    try:
+        with _directory() as (_, directory_fd):
+            names = []
+            for filename in os.listdir(directory_fd):
+                if not filename.endswith(".excalidraw"):
+                    continue
+                if _check_target(directory_fd, filename):
+                    names.append(filename.removesuffix(".excalidraw"))
+            return sorted(names)
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise SceneError(f"Could not list scenes: {exc.strerror}") from exc
