@@ -28,8 +28,16 @@ def _apply_style(el: dict, style_kwargs: dict):
     el["version"] = 1
     el["versionNonce"] = random.randrange(1, 2**31)
     el["updated"] = time.time_ns() // 1_000_000
-    el.update(index=None, groupIds=[], frameId=None, boundElements=[], link=None,
-              locked=False, isDeleted=False, roundness=None)
+    el.update(
+        index=None,
+        groupIds=[],
+        frameId=None,
+        boundElements=[],
+        link=None,
+        locked=False,
+        isDeleted=False,
+        roundness=None,
+    )
 
 
 def _base_shape(shape_type: str, x: int, y: int, w: int, h: int, **style):

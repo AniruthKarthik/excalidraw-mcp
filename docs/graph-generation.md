@@ -30,10 +30,10 @@ input order and support cyclic edge sets. Layout is deterministic.
 
 Spacing accumulates actual node dimensions, preventing the fixed-gap overlap of
 the earlier implementation. Labels wrap at 24 characters, and dimensions account
-for line count and shape padding. Arrow endpoints use rectangle/diamond bounding
-boxes or the ellipse equation rather than shape centers. This is intentionally a
-small deterministic layout engine: it does not minimize crossings or route around
-unrelated nodes.
+for line count and shape padding. Arrow endpoints use exact rectangle, diamond,
+or ellipse boundaries and account for imported shape rotation. This is
+intentionally a small deterministic layout engine: it does not minimize crossings
+or route around unrelated nodes.
 
 Limits are 200 nodes, 500 edges, 2,000 characters per label, and 200 characters
 per logical ID. Node IDs and explicit edge IDs must be unique; endpoints must

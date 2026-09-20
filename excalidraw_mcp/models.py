@@ -1,11 +1,12 @@
 """Document boundary for the supported editable subset; unknown fields survive."""
+
 import json
 import math
 from copy import deepcopy
 from typing import Any, NotRequired, TypedDict
 
-from config import max_elements
-from excalidraw.errors import SceneError
+from excalidraw_mcp.config import max_elements
+from excalidraw_mcp.errors import SceneError
 
 
 class Element(TypedDict):
@@ -65,7 +66,9 @@ def validate_document(document: dict[str, Any]) -> SceneDocument:
         raise SceneError("Document elements must be a list")
     element_limit = max_elements()
     if len(document["elements"]) > element_limit:
-        raise SceneError(f"Document exceeds the configured limit of {element_limit} elements")
+        raise SceneError(
+            f"Document exceeds the configured limit of {element_limit} elements"
+        )
     for field in ("appState", "files"):
         if not isinstance(document.get(field, {}), dict):
             raise SceneError(f"Document {field} must be an object")
@@ -74,7 +77,11 @@ def validate_document(document: dict[str, Any]) -> SceneDocument:
         if not isinstance(element, dict):
             raise SceneError("Each element must be an object")
         element_id = element.get("id")
-        if not isinstance(element_id, str) or not element_id.strip() or element_id in ids:
+        if (
+            not isinstance(element_id, str)
+            or not element_id.strip()
+            or element_id in ids
+        ):
             raise SceneError("Element IDs must be nonempty, unique strings")
         ids.add(element_id)
         if "isDeleted" in element and type(element["isDeleted"]) is not bool:
@@ -105,38 +112,73 @@ def normalize_relationships(document: SceneDocument) -> None:
     Tombstones are preserved but do not participate in active relationships.
     """
     active = {el["id"]: el for el in document["elements"] if not el.get("isDeleted")}
+    known_containers = {"rectangle", "ellipse", "diamond", "arrow"}
     reverse = {element_id: [] for element_id in active}
     labels = set()
     for el in active.values():
         container_id = el.get("containerId")
-        if container_id is not None:
-            if (el["type"] != "text" or not isinstance(container_id, str)
-                    or container_id not in active or container_id == el["id"]
-                    or active[container_id]["type"] not in ("rectangle", "ellipse", "diamond", "arrow")):
+        if el["type"] == "text" and container_id is not None:
+            if (
+                not isinstance(container_id, str)
+                or container_id not in active
+                or container_id == el["id"]
+                or active[container_id]["type"] not in known_containers
+            ):
                 raise SceneError(f"Invalid text container for {el['id']}")
             if container_id in labels:
                 raise SceneError("A container can own only one text label")
             labels.add(container_id)
             reverse[container_id].append({"id": el["id"], "type": "text"})
+        elif el["type"] in known_containers and container_id is not None:
+            raise SceneError(f"Invalid text container for {el['id']}")
         if el["type"] == "arrow":
             points = el.get("points")
-            if (not isinstance(points, list) or len(points) < 2
-                    or any(not isinstance(p, list) or len(p) != 2
-                           or not all(_finite_number(v) for v in p) for p in points)):
+            if (
+                not isinstance(points, list)
+                or len(points) < 2
+                or any(
+                    not isinstance(p, list)
+                    or len(p) != 2
+                    or not all(_finite_number(v) for v in p)
+                    for p in points
+                )
+            ):
                 raise SceneError(f"Arrow {el['id']} needs at least two finite points")
             for end in ("startBinding", "endBinding"):
                 binding = el.get(end)
                 if binding is None:
                     continue
                 target = binding.get("elementId") if isinstance(binding, dict) else None
-                if (not isinstance(target, str) or target not in active
-                        or target == el["id"] or active[target]["type"] == "arrow"
-                        or active[target].get("containerId")):
+                if (
+                    not isinstance(target, str)
+                    or target not in active
+                    or target == el["id"]
+                    or active[target]["type"] == "arrow"
+                    or active[target].get("containerId")
+                ):
                     raise SceneError(f"Invalid {end} for {el['id']}")
                 ref = {"id": el["id"], "type": "arrow"}
                 if ref not in reverse[target]:
                     reverse[target].append(ref)
     for element_id, refs in reverse.items():
         el = active[element_id]
-        if refs or "boundElements" in el:
-            el["boundElements"] = refs
+        # Unknown elements may use relationships introduced by newer Excalidraw
+        # versions. Never interpret or rewrite those fields.
+        if el["type"] not in known_containers:
+            continue
+        existing = el.get("boundElements")
+        preserved = []
+        if isinstance(existing, list):
+            for ref in existing:
+                if not isinstance(ref, dict):
+                    preserved.append(ref)
+                    continue
+                referenced = active.get(ref.get("id"))
+                known_ref = ref.get("type") in ("text", "arrow") and (
+                    referenced is None
+                    or referenced.get("type") in ("text", "arrow")
+                )
+                if not known_ref:
+                    preserved.append(ref)
+        if refs or preserved or "boundElements" in el:
+            el["boundElements"] = preserved + refs

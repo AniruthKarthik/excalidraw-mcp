@@ -12,9 +12,12 @@ dependencies = [
     "fastmcp>=3.3.1,<4",
 ]
 
+[project.urls]
+Repository = "https://github.com/Dharshan2208/excalidraw-mcp"
+Issues = "https://github.com/Dharshan2208/excalidraw-mcp/issues"
+
 [project.scripts]
-excalidraw-mcp = "main:run"
+excalidraw-mcp = "excalidraw_mcp.server:run"
 
 [tool.setuptools]
-packages = ["excalidraw"]
-py-modules = ["config", "layout", "main", "parser"]
+packages = ["excalidraw_mcp"]

@@ -4,18 +4,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import config
-import main
-from excalidraw.elements import rect
-from excalidraw.errors import SceneError
-from excalidraw.models import new_document, validate_document
-from excalidraw.scene import load_scene, save_scene
+from excalidraw_mcp import config
+from excalidraw_mcp import server as main
+from excalidraw_mcp.elements import rect
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.models import new_document, validate_document
+from excalidraw_mcp.scene import load_scene, save_scene
 
 
 class ConfigurationLimitTests(unittest.TestCase):
     def test_limit_defaults_are_bounded(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(config.max_scene_bytes(), 25 * 1024 * 1024)
+            self.assertEqual(config.max_export_bytes(), 25 * 1024 * 1024)
+            self.assertEqual(config.max_history_bytes(), 100 * 1024 * 1024)
             self.assertEqual(config.max_elements(), 10_000)
 
     def test_limit_configuration_rejects_invalid_values(self):
@@ -26,8 +28,9 @@ class ConfigurationLimitTests(unittest.TestCase):
             ("EXCALIDRAW_MAX_ELEMENTS", "100001", "between"),
         )
         for name, value, message in cases:
-            with self.subTest(name=name, value=value), patch.dict(
-                os.environ, {name: value}, clear=True
+            with (
+                self.subTest(name=name, value=value),
+                patch.dict(os.environ, {name: value}, clear=True),
             ):
                 with self.assertRaisesRegex(ValueError, message):
                     config.max_scene_bytes() if "BYTES" in name else config.max_elements()
@@ -48,10 +51,14 @@ class StorageLimitTests(unittest.TestCase):
     def test_oversized_scene_is_not_saved(self):
         document = new_document()
         document["metadata"] = "x" * 2_000
-        with patch.dict(os.environ, {
-            "EXCALIDRAW_SCENE_DIR": str(self.root),
-            "EXCALIDRAW_MAX_SCENE_BYTES": "1024",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "EXCALIDRAW_SCENE_DIR": str(self.root),
+                "EXCALIDRAW_MAX_SCENE_BYTES": "1024",
+            },
+            clear=True,
+        ):
             with self.assertRaisesRegex(SceneError, "limit of 1024 bytes"):
                 save_scene("large", document)
         self.assertFalse(self.root.exists())
@@ -59,10 +66,14 @@ class StorageLimitTests(unittest.TestCase):
     def test_oversized_scene_is_rejected_before_json_parsing(self):
         self.root.mkdir()
         (self.root / "large.excalidraw").write_bytes(b"{" + b" " * 1_024)
-        with patch.dict(os.environ, {
-            "EXCALIDRAW_SCENE_DIR": str(self.root),
-            "EXCALIDRAW_MAX_SCENE_BYTES": "1024",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "EXCALIDRAW_SCENE_DIR": str(self.root),
+                "EXCALIDRAW_MAX_SCENE_BYTES": "1024",
+            },
+            clear=True,
+        ):
             with self.assertRaisesRegex(SceneError, "limit of 1024 bytes"):
                 load_scene("large")
 

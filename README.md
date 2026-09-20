@@ -22,7 +22,9 @@ or `~/.local/share/excalidraw-mcp/scenes` on Linux, and
 undo depth (default: 20).
 Persisted scenes are limited to 25 MiB and documents to 10,000 elements by
 default. Operators can tune those limits with `EXCALIDRAW_MAX_SCENE_BYTES` and
-`EXCALIDRAW_MAX_ELEMENTS`; see [docs/operations.md](docs/operations.md).
+`EXCALIDRAW_MAX_ELEMENTS`. MCP exports default to 25 MiB, and undo snapshots
+share a 100 MiB budget; tune those with `EXCALIDRAW_MAX_EXPORT_BYTES` and
+`EXCALIDRAW_MAX_HISTORY_BYTES`. See [docs/operations.md](docs/operations.md).
 
 ## Workflow
 

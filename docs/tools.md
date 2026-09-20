@@ -23,7 +23,8 @@ or approve calls.
 - `delete`: delete an element and its owned label, cleaning reverse bindings.
 - `clear`: reset elements, app state, and embedded files.
 - `undo`: restore the snapshot before the latest successful mutation. History is
-  bounded by `EXCALIDRAW_HISTORY_LIMIT`; failed operations and reads add no entry.
+  bounded by `EXCALIDRAW_HISTORY_LIMIT` and `EXCALIDRAW_MAX_HISTORY_BYTES`;
+  failed operations and reads add no entry or consume existing history.
 
 ## Inspect and persist
 
@@ -36,7 +37,7 @@ or approve calls.
   the operation fail instead of being overwritten. Persisted byte and document
   element limits are enforced before the active scene changes.
 - `export_scene`: embeds a complete `.excalidraw` snapshot in the result without
-  writing to disk.
+  writing to disk, subject to `EXCALIDRAW_MAX_EXPORT_BYTES`.
 - `draw_architecture`: compatibility shorthand for comma/newline components such
   as `box: API, circle: Database`. It is a list DSL, not natural-language parsing.
 - `draw_graph`: structured graph generation described in `graph-generation.md`.
@@ -45,10 +46,11 @@ Saved documents are also readable without changing the active scene through the
 resource template `excalidraw://scenes/{name}.excalidraw`. The same name rules and
 storage confinement as `load` apply.
 
-Tools that replace the whole scene (`clear`, `load`, `draw_architecture`, and
-`draw_graph`) are marked destructive. File operations are marked open-world
-because they access configured server storage. Scene inspection and export are
-read-only. `save(overwrite=true)` can replace a file and is marked destructive.
+Tools that remove or replace content (`delete`, `clear`, `load`,
+`draw_architecture`, and `draw_graph`) are marked destructive. File operations
+are marked open-world because they access configured server storage. Scene
+inspection and export are read-only. `save(overwrite=true)` can replace a file
+and is marked destructive.
 
 The server is process-local. Creating multiple server instances through
 `create_server()` gives each its own scene, but enabling a shared HTTP transport

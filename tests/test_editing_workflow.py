@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from excalidraw.errors import SceneError
-from excalidraw.service import SceneService
-from excalidraw.state import SceneState
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.service import SceneService
+from excalidraw_mcp.state import SceneState
 
 
 class EditingWorkflowTests(unittest.TestCase):
@@ -26,14 +26,17 @@ class EditingWorkflowTests(unittest.TestCase):
 
     def test_update_label_styles_and_remove_label(self):
         result = self.service.add_shape("rectangle", 0, 0, 100, 100)
-        updated = self.service.update_element(result["rectangle_id"], label="API",
-                                              background_color="#ffeeaa", opacity=50)
+        updated = self.service.update_element(
+            result["rectangle_id"], label="API", background_color="#ffeeaa", opacity=50
+        )
         self.assertIsNotNone(updated["label_id"])
         shape = self.state.get(result["rectangle_id"])
         label = self.state.get(updated["label_id"])
         self.assertEqual((shape["backgroundColor"], shape["opacity"]), ("#ffeeaa", 50))
-        self.assertEqual((label["x"] + label["width"] / 2,
-                          label["y"] + label["height"] / 2), (50, 50))
+        self.assertEqual(
+            (label["x"] + label["width"] / 2, label["y"] + label["height"] / 2),
+            (50, 50),
+        )
         removed = self.service.update_element(result["rectangle_id"], label="")
         self.assertIsNone(removed["label_id"])
         self.assertIsNone(self.state.get(updated["label_id"]))
@@ -44,8 +47,10 @@ class EditingWorkflowTests(unittest.TestCase):
         edge = self.service.connect(a["rectangle_id"], b["rectangle_id"], "request")
         self.service.resize(a["rectangle_id"], 200, 160)
         shape, label = self.state.get(a["rectangle_id"]), self.state.get(a["label_id"])
-        self.assertEqual((label["x"] + label["width"] / 2,
-                          label["y"] + label["height"] / 2), (100, 80))
+        self.assertEqual(
+            (label["x"] + label["width"] / 2, label["y"] + label["height"] / 2),
+            (100, 80),
+        )
         connector = self.state.get(edge["arrow_id"])
         self.assertEqual((connector["x"], connector["y"]), (200, 68))
         self.assertEqual(connector["startBinding"]["elementId"], a["rectangle_id"])
@@ -75,14 +80,17 @@ class EditingWorkflowTests(unittest.TestCase):
             self.service.undo()
 
     def test_saved_scene_listing_and_read_do_not_change_active_scene(self):
-        with tempfile.TemporaryDirectory() as directory, patch.dict(
-            os.environ, {"EXCALIDRAW_SCENE_DIR": directory}
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {"EXCALIDRAW_SCENE_DIR": directory}),
         ):
             self.service.add_text(0, 0, "one")
             self.service.save("zeta")
             self.service.save("alpha")
             before, revision = self.state.document(), self.state.revision
-            self.assertEqual(self.service.list_saved_scenes()["scenes"], ["alpha", "zeta"])
+            self.assertEqual(
+                self.service.list_saved_scenes()["scenes"], ["alpha", "zeta"]
+            )
             self.assertEqual(json.loads(self.service.read_saved_scene("alpha")), before)
             self.assertEqual(self.state.revision, revision)
 

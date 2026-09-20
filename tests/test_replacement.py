@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 from fastmcp.exceptions import ToolError
 
-import main
-from excalidraw.elements import rect
-from excalidraw.errors import SceneError
-from excalidraw.scene import new_document
-from excalidraw.state import SceneState
-from excalidraw.service import SceneService
-from excalidraw import service as service_module
+from excalidraw_mcp import server as main
+from excalidraw_mcp.elements import rect
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.scene import new_document
+from excalidraw_mcp.state import SceneState
+from excalidraw_mcp.service import SceneService
+from excalidraw_mcp import service as service_module
 
 
 class ReplacementTests(unittest.TestCase):
@@ -27,7 +27,9 @@ class ReplacementTests(unittest.TestCase):
         self.original["custom"] = "preserve me"
         self.scene.replace(self.original)
         server = main.create_server(SceneService(self.scene))
-        self.tools = SimpleNamespace(**{tool.name: tool.fn for tool in asyncio.run(server.list_tools())})
+        self.tools = SimpleNamespace(
+            **{tool.name: tool.fn for tool in asyncio.run(server.list_tools())}
+        )
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -43,15 +45,22 @@ class ReplacementTests(unittest.TestCase):
                 self.assertEqual(self.scene.document(), self.original)
 
     def test_construction_failure_keeps_current_document(self):
-        with patch.object(service_module, "text", side_effect=RuntimeError("construction failed")):
+        with patch.object(
+            service_module, "text", side_effect=RuntimeError("construction failed")
+        ):
             with self.assertRaises(RuntimeError):
                 self.tools.draw_architecture("box: API, box: Database")
         self.assertEqual(self.scene.document(), self.original)
 
     def test_failed_load_keeps_current_document(self):
-        for document in ({**self.original, "elements": [self.original["elements"][0], {}]},
-                         {**self.original, "elements": None}, {"unrelated": "JSON"}):
-            (self.root / "bad.excalidraw").write_text(json.dumps(document), encoding="utf-8")
+        for document in (
+            {**self.original, "elements": [self.original["elements"][0], {}]},
+            {**self.original, "elements": None},
+            {"unrelated": "JSON"},
+        ):
+            (self.root / "bad.excalidraw").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
             with self.assertRaises(ToolError):
                 self.tools.load("bad")
             self.assertEqual(self.scene.document(), self.original)

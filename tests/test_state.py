@@ -7,12 +7,12 @@ from unittest.mock import patch
 
 from fastmcp.exceptions import ToolError
 
-from excalidraw.elements import rect
-from excalidraw.errors import SceneError
-from excalidraw.models import new_document
-from excalidraw.service import SceneService
-from excalidraw.state import SceneState
-from main import create_server
+from excalidraw_mcp.elements import rect
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.models import new_document
+from excalidraw_mcp.service import SceneService
+from excalidraw_mcp.state import SceneState
+from excalidraw_mcp.server import create_server
 
 
 class StateTests(unittest.TestCase):
@@ -94,15 +94,23 @@ class StateTests(unittest.TestCase):
 
     def test_parallel_adds_do_not_lose_elements_or_labels(self):
         with ThreadPoolExecutor(max_workers=8) as pool:
-            results = list(pool.map(
-                lambda i: self.service.add_shape("rectangle", i * 100, 0, 50, 50, str(i)),
-                range(40),
-            ))
+            results = list(
+                pool.map(
+                    lambda i: self.service.add_shape(
+                        "rectangle", i * 100, 0, 50, 50, str(i)
+                    ),
+                    range(40),
+                )
+            )
         self.assertEqual(len(self.state.all()), 80)
         for result in results:
             shape = self.state.get(result["rectangle_id"])
-            self.assertEqual(shape["boundElements"], [{"id": result["label_id"], "type": "text"}])
-            self.assertEqual(self.state.get(result["label_id"])["containerId"], shape["id"])
+            self.assertEqual(
+                shape["boundElements"], [{"id": result["label_id"], "type": "text"}]
+            )
+            self.assertEqual(
+                self.state.get(result["label_id"])["containerId"], shape["id"]
+            )
 
     def test_read_waits_for_complete_transaction(self):
         result = self.service.add_shape("rectangle", 0, 0, 100, 100, "label")
@@ -145,14 +153,35 @@ class StateTests(unittest.TestCase):
     def test_servers_have_isolated_state_and_keep_tool_names(self):
         async def tools(server):
             return {tool.name: tool.fn for tool in await server.list_tools()}
+
         first = asyncio.run(tools(create_server()))
         second = asyncio.run(tools(create_server()))
-        self.assertEqual(set(first), {
-            "add_rectangle", "add_circle", "add_diamond", "add_arrow", "add_text",
-            "clear", "delete", "move", "resize", "update_element", "connect", "undo",
-            "save", "load", "preview", "draw_architecture", "draw_graph", "export_scene",
-            "get_scene", "get_element", "list_saved_scenes",
-        })
+        self.assertEqual(
+            set(first),
+            {
+                "add_rectangle",
+                "add_circle",
+                "add_diamond",
+                "add_arrow",
+                "add_text",
+                "clear",
+                "delete",
+                "move",
+                "resize",
+                "update_element",
+                "connect",
+                "undo",
+                "save",
+                "load",
+                "preview",
+                "draw_architecture",
+                "draw_graph",
+                "export_scene",
+                "get_scene",
+                "get_element",
+                "list_saved_scenes",
+            },
+        )
         result = first["add_rectangle"](0, 0, 10, 10, label="A")
         with self.assertRaisesRegex(ToolError, "not found"):
             second["move"](result["rectangle_id"], 20, 20)
@@ -162,8 +191,9 @@ class StateTests(unittest.TestCase):
         with patch.dict(os.environ, {"EXCALIDRAW_HISTORY_LIMIT": "2"}):
             self.assertEqual(SceneState()._max_history, 2)
         for value in ("0", "101", "invalid"):
-            with self.subTest(value=value), patch.dict(
-                os.environ, {"EXCALIDRAW_HISTORY_LIMIT": value}
+            with (
+                self.subTest(value=value),
+                patch.dict(os.environ, {"EXCALIDRAW_HISTORY_LIMIT": value}),
             ):
                 with self.assertRaises(ValueError):
                     SceneState()

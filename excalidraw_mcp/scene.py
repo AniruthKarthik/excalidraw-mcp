@@ -1,4 +1,5 @@
 """Validated document persistence in an explicitly configured directory."""
+
 import json
 import os
 import re
@@ -6,14 +7,16 @@ import stat
 import uuid
 from contextlib import contextmanager
 
-from config import max_scene_bytes, scene_directory
-from excalidraw.errors import SceneError
-from excalidraw.document import normalize_document, serialize_document
-from excalidraw.models import new_document
+from excalidraw_mcp.config import max_scene_bytes, scene_directory
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.document import normalize_document, serialize_document
+from excalidraw_mcp.models import new_document
 
 
 def _filename(name):
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", name):
+    if not isinstance(name, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}", name
+    ):
         raise SceneError(
             "Scene name must be 1–128 letters, digits, underscores or hyphens, "
             "starting with a letter or digit; omit the extension"
@@ -29,7 +32,7 @@ def _directory(create=False):
     # so replacement of a directory path cannot redirect an in-flight operation.
     root = scene_directory().resolve()
     if create:
-        root.mkdir(parents=True, exist_ok=True)
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         yield root, fd
@@ -43,7 +46,9 @@ def _check_target(fd, filename):
     except FileNotFoundError:
         return False
     if not stat.S_ISREG(info.st_mode):
-        raise SceneError("Scene target must be a regular file, not a symlink or directory")
+        raise SceneError(
+            "Scene target must be a regular file, not a symlink or directory"
+        )
     return True
 
 
@@ -57,9 +62,16 @@ def save_scene(name, document, overwrite=False):
     try:
         with _directory(create=True) as (root, directory_fd):
             if _check_target(directory_fd, filename) and not overwrite:
-                raise SceneError("Scene already exists; use overwrite=true to replace it")
+                raise SceneError(
+                    "Scene already exists; use overwrite=true to replace it"
+                )
             temporary = f".scene-{uuid.uuid4().hex}.tmp"
-            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=directory_fd)
+            fd = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=directory_fd,
+            )
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as stream:
                     stream.write(payload)
@@ -67,11 +79,24 @@ def save_scene(name, document, overwrite=False):
                     os.fsync(stream.fileno())
                 if overwrite:
                     _check_target(directory_fd, filename)
-                    os.replace(temporary, filename, src_dir_fd=directory_fd, dst_dir_fd=directory_fd)
+                    os.replace(
+                        temporary,
+                        filename,
+                        src_dir_fd=directory_fd,
+                        dst_dir_fd=directory_fd,
+                    )
                 else:
                     # Publishing with a hard link atomically refuses an existing
                     # destination, even when another save wins the race.
-                    os.link(temporary, filename, src_dir_fd=directory_fd, dst_dir_fd=directory_fd, follow_symlinks=False)
+                    os.link(
+                        temporary,
+                        filename,
+                        src_dir_fd=directory_fd,
+                        dst_dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                # Persist the directory entry as well as the file contents.
+                os.fsync(directory_fd)
             finally:
                 try:
                     os.unlink(temporary, dir_fd=directory_fd)
@@ -79,7 +104,9 @@ def save_scene(name, document, overwrite=False):
                     pass
             return str(root / filename)
     except FileExistsError as exc:
-        raise SceneError("Scene already exists; use overwrite=true to replace it") from exc
+        raise SceneError(
+            "Scene already exists; use overwrite=true to replace it"
+        ) from exc
     except UnicodeError as exc:
         raise SceneError("Scene contains text that cannot be encoded as UTF-8") from exc
     except OSError as exc:
@@ -92,15 +119,26 @@ def load_scene(name):
         with _directory() as (_, directory_fd):
             if not _check_target(directory_fd, filename):
                 raise SceneError(f"Scene '{name}' not found")
-            fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
-            with os.fdopen(fd, "r", encoding="utf-8") as stream:
+            fd = os.open(
+                filename,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=directory_fd,
+            )
+            with os.fdopen(fd, "rb") as stream:
                 info = os.fstat(stream.fileno())
                 if not stat.S_ISREG(info.st_mode):
                     raise SceneError("Scene target must be a regular file")
                 size_limit = max_scene_bytes()
                 if info.st_size > size_limit:
-                    raise SceneError(f"Scene exceeds the configured limit of {size_limit} bytes")
-                document = json.load(stream)
+                    raise SceneError(
+                        f"Scene exceeds the configured limit of {size_limit} bytes"
+                    )
+                payload = stream.read(size_limit + 1)
+                if len(payload) > size_limit:
+                    raise SceneError(
+                        f"Scene exceeds the configured limit of {size_limit} bytes"
+                    )
+                document = json.loads(payload)
         return normalize_document(document)
     except FileNotFoundError as exc:
         raise SceneError(f"Scene '{name}' not found") from exc
@@ -117,8 +155,15 @@ def list_scenes():
             for filename in os.listdir(directory_fd):
                 if not filename.endswith(".excalidraw"):
                     continue
-                if _check_target(directory_fd, filename):
-                    names.append(filename.removesuffix(".excalidraw"))
+                name = filename.removesuffix(".excalidraw")
+                try:
+                    if _filename(name) != filename:
+                        continue
+                    info = os.stat(filename, dir_fd=directory_fd, follow_symlinks=False)
+                except (FileNotFoundError, SceneError):
+                    continue
+                if stat.S_ISREG(info.st_mode):
+                    names.append(name)
             return sorted(names)
     except FileNotFoundError:
         return []

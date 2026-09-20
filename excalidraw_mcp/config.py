@@ -1,11 +1,14 @@
 """Storage configuration with no import-time filesystem writes."""
+
 import os
 import sys
 from pathlib import Path
 
 
 DEFAULT_MAX_SCENE_BYTES = 25 * 1024 * 1024
+DEFAULT_MAX_EXPORT_BYTES = 25 * 1024 * 1024
 DEFAULT_MAX_ELEMENTS = 10_000
+DEFAULT_MAX_HISTORY_BYTES = 100 * 1024 * 1024
 
 
 def scene_directory():
@@ -22,7 +25,11 @@ def default_scene_directory():
         data_home = Path.home() / "Library" / "Application Support"
     else:
         configured = os.environ.get("XDG_DATA_HOME")
-        data_home = Path(configured).expanduser() if configured else Path.home() / ".local" / "share"
+        data_home = (
+            Path(configured).expanduser()
+            if configured
+            else Path.home() / ".local" / "share"
+        )
         if not data_home.is_absolute():
             raise ValueError("XDG_DATA_HOME must be an absolute path")
     return data_home / "excalidraw-mcp" / "scenes"
@@ -32,10 +39,30 @@ def history_limit():
     return _bounded_integer("EXCALIDRAW_HISTORY_LIMIT", 20, 1, 100)
 
 
+def max_history_bytes():
+    """Maximum approximate serialized bytes retained across undo snapshots."""
+    return _bounded_integer(
+        "EXCALIDRAW_MAX_HISTORY_BYTES",
+        DEFAULT_MAX_HISTORY_BYTES,
+        1_024,
+        500 * 1024 * 1024,
+    )
+
+
 def max_scene_bytes():
     """Maximum UTF-8 size accepted for one persisted scene."""
     return _bounded_integer(
         "EXCALIDRAW_MAX_SCENE_BYTES", DEFAULT_MAX_SCENE_BYTES, 1_024, 100 * 1024 * 1024
+    )
+
+
+def max_export_bytes():
+    """Maximum UTF-8 size returned by an MCP scene export or resource."""
+    return _bounded_integer(
+        "EXCALIDRAW_MAX_EXPORT_BYTES",
+        DEFAULT_MAX_EXPORT_BYTES,
+        1_024,
+        100 * 1024 * 1024,
     )
 
 

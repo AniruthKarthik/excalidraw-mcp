@@ -14,11 +14,7 @@ SHAPE_ALIASES = {
 def parse_architecture(prompt: str):
     """Parse the documented comma/newline component shorthand."""
 
-    parts = [
-        part.strip()
-        for part in re.split(r"[\n,]+", prompt)
-        if part.strip()
-    ]
+    parts = [part.strip() for part in re.split(r"[\n,]+", prompt) if part.strip()]
 
     nodes = []
 
@@ -39,10 +35,12 @@ def parse_architecture(prompt: str):
                 shape = SHAPE_ALIASES[words[0].lower()]
                 label = words[1].strip()
 
-        nodes.append({
-            "id": f"node-{index + 1}",
-            "label": label,
-            "shape": shape,
-        })
+        nodes.append(
+            {
+                "id": f"node-{index + 1}",
+                "label": label,
+                "shape": shape,
+            }
+        )
 
     return nodes

@@ -1,7 +1,8 @@
 .venv
+.wheel-venv
 scenes
 __pycache__
-excalidraw/__pycache__
+excalidraw_mcp/__pycache__
 *.egg-info/
 build/
 dist/

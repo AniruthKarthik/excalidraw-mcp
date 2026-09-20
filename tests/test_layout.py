@@ -1,14 +1,18 @@
 import unittest
 
-from excalidraw.errors import SceneError
-from layout import boundary_point, layered_layout, linear_layout, wrap_label
+from excalidraw_mcp.errors import SceneError
+from excalidraw_mcp.layout import boundary_point, layered_layout, linear_layout, wrap_label
 
 
 class LayoutTests(unittest.TestCase):
     def nodes(self):
         return [
             {"id": "client", "label": "Client", "shape": "rectangle"},
-            {"id": "api", "label": "A very long API gateway label that wraps", "shape": "rectangle"},
+            {
+                "id": "api",
+                "label": "A very long API gateway label that wraps",
+                "shape": "rectangle",
+            },
             {"id": "db", "label": "Database", "shape": "ellipse"},
         ]
 
@@ -24,9 +28,11 @@ class LayoutTests(unittest.TestCase):
 
     def test_layered_layout_supports_branches_and_is_deterministic(self):
         nodes = self.nodes() + [{"id": "cache", "label": "Cache", "shape": "diamond"}]
-        edges = [{"source": "client", "target": "api"},
-                 {"source": "api", "target": "db"},
-                 {"source": "api", "target": "cache"}]
+        edges = [
+            {"source": "client", "target": "api"},
+            {"source": "api", "target": "db"},
+            {"source": "api", "target": "cache"},
+        ]
         first = layered_layout(nodes, edges)
         self.assertEqual(first, layered_layout(nodes, edges))
         lookup = {node["id"]: node for node in first}
@@ -37,8 +43,13 @@ class LayoutTests(unittest.TestCase):
     def test_layered_layout_rejects_cycles(self):
         nodes = self.nodes()[:2]
         with self.assertRaisesRegex(SceneError, "acyclic"):
-            layered_layout(nodes, [{"source": "client", "target": "api"},
-                                   {"source": "api", "target": "client"}])
+            layered_layout(
+                nodes,
+                [
+                    {"source": "client", "target": "api"},
+                    {"source": "api", "target": "client"},
+                ],
+            )
 
     def test_boundary_points_lie_on_shape_edges(self):
         source = {"shape": "rectangle", "x": 0, "y": 0, "w": 100, "h": 100}

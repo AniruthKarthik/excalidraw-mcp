@@ -23,6 +23,7 @@ stored unencrypted in `EXCALIDRAW_SCENE_DIR`; access control and backups are the
 operator's responsibility.
 
 Scene names are confined to the configured directory, symlinks are rejected,
-writes are atomic, and configurable byte/element limits bound common resource
-exhaustion paths. The server does not provide authentication or multi-user
-isolation and must not be exposed directly as a public network service.
+writes are atomic, newly created storage directories are private, and
+configurable scene/export/history/element limits bound common resource exhaustion
+paths. The server does not provide authentication or multi-user isolation and
+must not be exposed directly as a public network service.
