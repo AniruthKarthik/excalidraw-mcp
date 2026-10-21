@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "excalidraw-mcp"
@@ -17,7 +17,4 @@ Repository = "https://github.com/Dharshan2208/excalidraw-mcp"
 Issues = "https://github.com/Dharshan2208/excalidraw-mcp/issues"
 
 [project.scripts]
-excalidraw-mcp = "excalidraw_mcp.server:run"
-
-[tool.setuptools]
-packages = ["excalidraw_mcp"]
+excalidraw-mcp = "excalidraw_mcp.server:main"

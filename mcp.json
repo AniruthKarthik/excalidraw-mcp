@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "excalidraw": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
+        "excalidraw-mcp"
+      ]
+    }
+  }
+}

@@ -421,10 +421,15 @@ def create_server(service: SceneService | None = None) -> FastMCP:
 mcp = create_server()
 
 
+def main():
+    """Run the installed stdio MCP server."""
+    mcp.run()
+
+
 def run():
     """Run the installed stdio MCP server."""
     mcp.run(show_banner=False)
 
 
 if __name__ == "__main__":
-    run()
+    main()

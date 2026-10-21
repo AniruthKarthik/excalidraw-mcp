@@ -79,6 +79,11 @@ class StorageLimitTests(unittest.TestCase):
 
 
 class EntrypointTests(unittest.TestCase):
+    def test_main_entrypoint_runs_mcp_run(self):
+        with patch.object(main.mcp, "run") as run:
+            main.main()
+        run.assert_called_once_with()
+
     def test_console_entrypoint_runs_stdio_without_banner(self):
         with patch.object(main.mcp, "run") as run:
             main.run()
