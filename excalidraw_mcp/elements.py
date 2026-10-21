@@ -66,6 +66,7 @@ def diamond(x: int, y: int, w: int, h: int, **style):
 
 
 def text(x: int, y: int, content: str, fontSize: int = 20, **style):
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
     el = {
         "id": str(uuid.uuid4()),
         "type": "text",
@@ -112,6 +113,7 @@ def bind_text(text_el: dict, container_el: dict):
     text_el["containerId"] = container_el["id"]
     text_el["textAlign"] = "center"
     text_el["verticalAlign"] = "middle"
+    text_el["angle"] = container_el.get("angle", 0)
 
     text_id = text_el["id"]
     if container_el.get("boundElements") is None:

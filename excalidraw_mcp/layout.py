@@ -80,7 +80,9 @@ def layered_layout(
             if incoming[target] == 0:
                 queue.append(target)
     if len(visited) != len(ids):
-        raise SceneError("Layered layout requires an acyclic graph")
+        raise SceneError(
+            "Layered layout requires an acyclic graph. Use layout='horizontal' or 'vertical' for cyclic graphs."
+        )
     groups, lookup = defaultdict(list), {node["id"]: node for node in nodes}
     for node_id in ids:
         groups[rank.get(node_id, 0)].append(lookup[node_id])
@@ -125,11 +127,11 @@ def boundary_point(node, target, coincident_direction=1):
     dx, dy = tx - cx, ty - cy
     if dx == dy == 0:
         dx = 1 if coincident_direction >= 0 else -1
-    angle = node.get("angle", 0)
+    angle = node.get("angle") or 0
     cosine, sine = math.cos(angle), math.sin(angle)
     local_dx = dx * cosine + dy * sine
     local_dy = -dx * sine + dy * cosine
-    half_width, half_height = node["w"] / 2, node["h"] / 2
+    half_width, half_height = max(node["w"] / 2, 0.5), max(node["h"] / 2, 0.5)
     if node["shape"] == "ellipse":
         scale = 1 / math.sqrt(
             (local_dx / half_width) ** 2 + (local_dy / half_height) ** 2

@@ -8,30 +8,41 @@ from mcp.types import EmbeddedResource, TextResourceContents
 from mcp.types import ToolAnnotations
 
 from excalidraw_mcp.contracts import (
-    Color,
+    ArchitectureResult,
     Boolean,
+    Color,
+    ConnectResult,
     Coordinate,
+    CreateResult,
+    DeleteResult,
     Dimension,
     Direction,
     ElementId,
+    ElementResult,
     FillStyle,
     FontSize,
     GraphEdge,
     GraphNode,
+    GraphResult,
     Label,
     LayoutType,
+    LoadResult,
+    MoveResult,
+    NonEmptyText,
     Offset,
     Opacity,
     PageLimit,
+    ResizeResult,
     Roughness,
+    SaveResult,
+    SavedScenesResult,
     SceneName,
-    StrokeStyle,
-    StrokeWidth,
-    CreateResult,
-    ElementResult,
-    GraphResult,
     ScenePage,
     StatusResult,
+    StrokeStyle,
+    StrokeWidth,
+    UndoResult,
+    UpdateResult,
 )
 from excalidraw_mcp.document import MIME_TYPE
 from excalidraw_mcp.service import SceneService
@@ -159,6 +170,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
         opacity: Opacity | None = None,
+        roughness: Roughness | None = None,
     ) -> CreateResult:
         """Add an arrow between two points.
 
@@ -169,6 +181,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeWidth=strokeWidth,
             strokeStyle=strokeStyle,
             opacity=opacity,
+            roughness=roughness,
         )
         return invoke(service.add_arrow, x, y, x2, y2, label, **style)
 
@@ -188,7 +201,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         ),
         run_in_thread=False,
     )
-    def delete(element_id: ElementId) -> dict:
+    def delete(element_id: ElementId) -> DeleteResult:
         """Delete an element and its owned label; detach surviving connectors."""
         return invoke(service.delete, element_id)
 
@@ -196,7 +209,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
         run_in_thread=False,
     )
-    def move(element_id: ElementId, x: Coordinate, y: Coordinate) -> dict:
+    def move(element_id: ElementId, x: Coordinate, y: Coordinate) -> MoveResult:
         """Move an element and its label. Shape connectors follow; directly moved arrows detach."""
         return invoke(service.move, element_id, x, y)
 
@@ -204,7 +217,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(destructiveHint=True, openWorldHint=True),
         run_in_thread=False,
     )
-    def save(name: SceneName, overwrite: Boolean = False) -> dict:
+    def save(name: SceneName, overwrite: Boolean = False) -> SaveResult:
         """Save a consistent snapshot. Set overwrite=true to replace an existing file."""
         return invoke(service.save, name, overwrite=overwrite)
 
@@ -222,7 +235,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
         run_in_thread=False,
     )
-    def list_saved_scenes() -> dict:
+    def list_saved_scenes() -> SavedScenesResult:
         """List scene names available in the configured storage directory."""
         return invoke(service.list_saved_scenes)
 
@@ -230,7 +243,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def add_text(
         x: Coordinate,
         y: Coordinate,
-        content: Label,
+        content: NonEmptyText,
         font_size: FontSize = 20,
         strokeColor: Color | None = None,
         opacity: Opacity | None = None,
@@ -259,7 +272,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         strokeStyle: StrokeStyle | None = None,
         opacity: Opacity | None = None,
         roughness: Roughness | None = None,
-    ) -> dict:
+    ) -> UpdateResult:
         """Update a label and/or styles. An empty label removes an existing label."""
         return invoke(
             service.update_element,
@@ -278,7 +291,9 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
         run_in_thread=False,
     )
-    def resize(element_id: ElementId, width: Dimension, height: Dimension) -> dict:
+    def resize(
+        element_id: ElementId, width: Dimension, height: Dimension
+    ) -> ResizeResult:
         """Resize a shape and recenter its label."""
         return invoke(service.resize, element_id, width, height)
 
@@ -291,7 +306,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
         opacity: Opacity | None = None,
-    ) -> dict:
+        roughness: Roughness | None = None,
+    ) -> ConnectResult:
         """Connect two existing shapes by ID with a bound arrow."""
         return invoke(
             service.connect,
@@ -303,6 +319,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
                 strokeWidth=strokeWidth,
                 strokeStyle=strokeStyle,
                 opacity=opacity,
+                roughness=roughness,
             ),
         )
 
@@ -310,7 +327,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False),
         run_in_thread=False,
     )
-    def undo() -> dict:
+    def undo() -> UndoResult:
         """Restore the scene before the most recent successful mutation."""
         return invoke(service.undo)
 
@@ -332,7 +349,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         annotations=ToolAnnotations(destructiveHint=True, openWorldHint=True),
         run_in_thread=False,
     )
-    def load(name: SceneName) -> dict:
+    def load(name: SceneName) -> LoadResult:
         """Replace the scene with a saved document; concurrent changes cause a retry error."""
         return invoke(service.load, name)
 
@@ -351,7 +368,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         run_in_thread=False,
     )
     def draw_architecture(
-        prompt: Label,
+        prompt: NonEmptyText,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
         fillStyle: FillStyle | None = None,
@@ -359,7 +376,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         strokeStyle: StrokeStyle | None = None,
         opacity: Opacity | None = None,
         roughness: Roughness | None = None,
-    ) -> dict:
+    ) -> ArchitectureResult:
         """Replace the scene with a diagram from comma/newline-separated components.
 
         Supports ``"shape: label"`` syntax where shape can be

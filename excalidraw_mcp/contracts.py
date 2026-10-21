@@ -27,8 +27,11 @@ StrokeStyle = Literal["solid", "dashed", "dotted"]
 ShapeType = Literal["rectangle", "ellipse", "diamond"]
 LayoutType = Literal["layered", "horizontal", "vertical"]
 Direction = Literal["horizontal", "vertical"]
-Offset = Annotated[int, Field(ge=0)]
-PageLimit = Annotated[int, Field(ge=1, le=200)]
+Offset = Annotated[int, Field(strict=True, ge=0)]
+PageLimit = Annotated[int, Field(strict=True, ge=1, le=200)]
+NonEmptyText = Annotated[
+    str, Field(strict=True, min_length=1, max_length=2_000, pattern=r".*\S.*")
+]
 
 
 class GraphNode(BaseModel):
@@ -88,3 +91,70 @@ class GraphResult(TypedDict):
     node_map: dict[str, dict[str, str | None]]
     edge_map: dict[str, dict[str, str | None]]
     revision: int
+
+
+class DeleteResult(TypedDict):
+    status: str
+    element_id: str
+    deleted_ids: list[str]
+
+
+class MoveResult(TypedDict):
+    status: str
+    element_id: str
+    x: float
+    y: float
+
+
+class ResizeResult(TypedDict):
+    status: str
+    element_id: str
+    width: float
+    height: float
+
+
+class UpdateResult(TypedDict):
+    status: str
+    element_id: str
+    label_id: str | None
+
+
+class ConnectResult(TypedDict):
+    arrow_id: str
+    label_id: str | None
+    source_id: str
+    target_id: str
+
+
+class SaveResult(TypedDict):
+    path: str
+    elements: int
+    status: str
+
+
+class LoadResult(TypedDict):
+    loaded: int
+    name: str
+    status: str
+
+
+class UndoResult(TypedDict):
+    status: str
+    revision: int
+    history_depth: int
+
+
+class SavedScenesResult(TypedDict):
+    scenes: list[str]
+    count: int
+
+
+class ArchitectureResult(TypedDict):
+    status: str
+    nodes: int
+    edges: int
+    node_map: dict[str, dict[str, str | None]]
+    edge_map: dict[str, dict[str, str | None]]
+    revision: int
+    url: None
+    next_step: str

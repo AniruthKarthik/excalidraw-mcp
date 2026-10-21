@@ -19,7 +19,7 @@ def parse_architecture(prompt: str):
     nodes = []
 
     for index, part in enumerate(parts):
-        cleaned = part.lstrip("-* ").strip()
+        cleaned = re.sub(r"^\s*(?:[-*]|\d+[.)])+\s*", "", part).strip()
         shape = "rectangle"
         label = cleaned
 

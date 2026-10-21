@@ -77,6 +77,10 @@ def _as_layout_node(el):
 
 
 def _reroute_connector(index, connector):
+    if connector.get("elbowed") or connector.get("angle", 0):
+        raise SceneError(
+            "Resizing shapes attached to elbowed or rotated arrows is not supported yet"
+        )
     start_id = (connector.get("startBinding") or {}).get("elementId")
     end_id = (connector.get("endBinding") or {}).get("elementId")
     if not start_id or not end_id or start_id not in index or end_id not in index:
@@ -156,7 +160,12 @@ class SceneService:
         return {"element": element, "revision": revision}
 
     def get_scene(self, offset=0, limit=50):
-        if offset < 0 or not 1 <= limit <= 200:
+        if (
+            type(offset) is not int
+            or type(limit) is not int
+            or offset < 0
+            or not 1 <= limit <= 200
+        ):
             raise SceneError(
                 "offset must be nonnegative and limit must be between 1 and 200"
             )
@@ -323,54 +332,97 @@ class SceneService:
         def update(document):
             index = _active(document)
             el = _require(index, element_id)
-            label_id = (_label_for(index, element_id) or {}).get("id")
-            if label is not None:
-                if el["type"] == "text" and not label:
-                    raise SceneError(
-                        "Standalone text cannot be empty; use delete instead"
-                    )
-                target = el if el["type"] == "text" else _label_for(index, element_id)
-                if target is None:
+
+            if el["type"] == "text":
+                container_id = el.get("containerId")
+                container = index.get(container_id) if container_id else None
+                label_id = el["id"]
+                if label is not None:
                     if not label:
+                        if container is None:
+                            raise SceneError(
+                                "Standalone text cannot be empty; use delete instead"
+                            )
+                        document["elements"] = [
+                            item
+                            for item in document["elements"]
+                            if item["id"] != el["id"]
+                        ]
+                        index.pop(el["id"], None)
                         return {
                             "status": "updated",
                             "element_id": element_id,
                             "label_id": None,
                         }
-                    label_style = {
-                        "strokeColor": updates.get(
-                            "strokeColor", el.get("strokeColor", "#1e1e1e")
-                        ),
-                        "opacity": updates.get("opacity", el.get("opacity", 100)),
-                    }
-                    target = text(el["x"], el["y"], label, **label_style)
-                    bind_text(target, el)
-                    document["elements"].append(target)
-                    index[target["id"]] = target
-                    label_id = target["id"]
-                elif not label:
-                    document["elements"] = [
-                        item
-                        for item in document["elements"]
-                        if item["id"] != target["id"]
-                    ]
-                    index.pop(target["id"], None)
-                    label_id = None
-                    target = None
-                else:
-                    target["text"] = target["originalText"] = label
-                    target["width"] = (
-                        max(map(len, label.split("\n"))) * target["fontSize"] * 0.6
-                    )
-                    target["height"] = (
-                        len(label.split("\n"))
-                        * target["fontSize"]
-                        * target["lineHeight"]
-                    )
-                if target and target.get("containerId"):
-                    _center_label(target, el)
-            el.update(updates)
-            return {"status": "updated", "element_id": element_id, "label_id": label_id}
+                    else:
+                        el["text"] = el["originalText"] = label
+                        el["width"] = (
+                            max(map(len, label.split("\n"))) * el["fontSize"] * 0.6
+                        )
+                        el["height"] = (
+                            len(label.split("\n"))
+                            * el["fontSize"]
+                            * el["lineHeight"]
+                        )
+                        if container:
+                            _center_label(el, container)
+                el.update(updates)
+                return {
+                    "status": "updated",
+                    "element_id": element_id,
+                    "label_id": label_id,
+                }
+            else:
+                target = _label_for(index, element_id)
+                label_id = target.get("id") if target else None
+                if label is not None:
+                    if target is None:
+                        if label:
+                            label_style = {
+                                "strokeColor": updates.get(
+                                    "strokeColor", el.get("strokeColor", "#1e1e1e")
+                                ),
+                                "opacity": updates.get("opacity", el.get("opacity", 100)),
+                            }
+                            font_size = 14 if el["type"] == "arrow" else 20
+                            target = text(
+                                el["x"],
+                                el["y"],
+                                label,
+                                fontSize=font_size,
+                                **label_style,
+                            )
+                            bind_text(target, el)
+                            _center_label(target, el)
+                            document["elements"].append(target)
+                            index[target["id"]] = target
+                            label_id = target["id"]
+                    elif not label:
+                        document["elements"] = [
+                            item
+                            for item in document["elements"]
+                            if item["id"] != target["id"]
+                        ]
+                        index.pop(target["id"], None)
+                        label_id = None
+                        target = None
+                    else:
+                        target["text"] = target["originalText"] = label
+                        target["width"] = (
+                            max(map(len, label.split("\n"))) * target["fontSize"] * 0.6
+                        )
+                        target["height"] = (
+                            len(label.split("\n"))
+                            * target["fontSize"]
+                            * target["lineHeight"]
+                        )
+                        _center_label(target, el)
+                el.update(updates)
+                return {
+                    "status": "updated",
+                    "element_id": element_id,
+                    "label_id": label_id,
+                }
 
         return self.state.apply(update)
 
