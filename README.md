@@ -188,47 +188,50 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
 }
 ```
 
-When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 21 tools with zero manual configuration.
+When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 24 tools with zero manual configuration.
 
 ---
 
 ## MCP Tools Reference
 
-The server exports 21 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
+The server exports 24 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
 
 ### 1. High-Level Generation
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`) | `GraphResult`<br>`{ revision, element_count, node_map, edge_map }` | Replaces the scene with a structured diagram using automatic topological ranking, edge routing, and label wrapping. Returns stable logical-to-element ID mappings. |
+| `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, edge routing, clustered frame grouping, and label wrapping. Returns stable logical-to-element ID mappings. |
 | `draw_architecture` | `prompt: str` (e.g., `"box: Frontend, db: Postgres"`)<br>Optional styles (`strokeColor`, `backgroundColor`, etc.) | `ArchitectureResult`<br>`{ revision, element_count, components }` | Rapid diagram generator parsing comma/newline-separated shorthand syntax (`box`, `circle`, `diamond`) with auto-connectors. |
 
-### 2. Primitive Shapes & Text
+### 2. Primitive Shapes, Text & Frames
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `add_rectangle` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles | `ElementResult`<br>`{ id, label_id, revision }` | Adds a rectangle to the active scene with an optional centered bound label. |
-| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles | `ElementResult`<br>`{ id, label_id, revision }` | Adds a circle (ellipse) with an optional centered bound label. |
-| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles | `ElementResult`<br>`{ id, label_id, revision }` | Adds a decision diamond with an optional centered bound label. |
-| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles | `ElementResult`<br>`{ id, label_id, revision }` | Adds a 2-point directional arrow with an optional midpoint label. |
-| `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles | `CreateResult`<br>`{ id, revision }` | Creates a standalone text element. |
-| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles | `ConnectResult`<br>`{ arrow_id, label_id, revision }` | Binds two existing shapes with a self-docking arrow that tracks shape movement. |
+| `add_rectangle` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a rectangle to the active scene with an optional centered bound label, adaptive/round corner roundness, and frame membership. |
+| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles + `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a circle (ellipse) with an optional centered bound label and frame membership. |
+| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a decision diamond with an optional centered bound label, adaptive roundness, and frame membership. |
+| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a directional arrow (straight or elbowed) with an optional midpoint label. |
+| `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles + `frame_id: str = None` | `CreateResult`<br>`{ id, revision }` | Creates a standalone text element with optional frame membership. |
+| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id, revision }` | Binds two existing shapes with a self-docking straight or elbowed arrow that tracks shape movement. |
+| `add_frame` | `name: str = ""`, `x: float`, `y: float`, `w: float`, `h: float`<br>`element_ids: list[str] = None` | `CreateResult`<br>`{ id, revision }` | Creates an Excalidraw frame container and optionally parents specified elements inside it. |
 
 ### 3. Scene Editing & Manipulation
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Bound labels and attached connectors follow automatically. |
-| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape, recalculates label centering, and reroutes connected arrows. |
-| `update_element` | `element_id: str`<br>`label: str | None = None` + styles | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label or styling (colors, roughness, stroke width, opacity). |
-| `delete` | `element_id: str` | `DeleteResult`<br>`{ deleted_id, deleted_label_id, revision }` | Deletes an element and its bound label; cleans up references in connected arrows. |
+| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Moving a frame moves all contained elements; bound labels and attached connectors follow automatically. |
+| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows. |
+| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment. |
+| `delete` | `element_id: str` | `DeleteResult`<br>`{ deleted_id, deleted_label_id, revision }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows. |
+| `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, or update actions in a single revision step with dynamic `client_id` resolution. |
 | `clear` | None | `DeleteResult`<br>`{ deleted: true, revision }` | Wipes the entire scene, active elements, and embedded state. |
 | `undo` | None | `UndoResult`<br>`{ restored_revision, available_history }` | Rolls back the scene to the state immediately preceding the latest mutation. |
 
-### 4. Inspection, Export & Storage
+### 4. Inspection, Query, Export & Storage
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
+| `find_elements` | `query: str | None`<br>`type: str | None`<br>`frame_id: str | None`<br>`element_id: str | None`<br>`connected_to: str | None`<br>`include_bound_labels: bool = False`<br>`limit: int = 50` | `FindResult`<br>`{ matches, total, revision }` | Filters active elements by text search, element type, parent frame, ID, or graph connectivity. |
 | `get_scene` | `offset: int = 0`, `limit: int = 50` | `ScenePage`<br>`{ elements, total, offset, limit, has_more, revision }` | Paginated inspection of all elements currently on the canvas. |
 | `get_element` | `element_id: str` | `ElementResult`<br>`{ element, revision }` | Fetches details and properties of a single element by its ID. |
 | `list_saved_scenes`| None | `SavedScenesResult`<br>`{ scenes: list[str] }` | Returns a list of all scene files stored in the persistent directory. |
@@ -287,7 +290,7 @@ pip install -e .
 
 ### 2. Run the Test Suite
 
-The test suite contains 120+ unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, and MCP schemas:
+The test suite contains 140 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, and MCP schemas:
 
 ```bash
 uv run python -B -m unittest discover -s tests -v
