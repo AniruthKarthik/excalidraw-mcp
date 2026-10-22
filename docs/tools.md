@@ -12,6 +12,8 @@ or approve calls.
   supports `roundness` ("adaptive", "round", "sharp") and `frame_id`; returns the shape ID and `label_id`.
 - `add_arrow`: add a coordinate-based arrow (supports `elbowed=True/False`) and optional bound label.
 - `add_text`: add standalone text with optional `frame_id`.
+- `add_code_block`: add a syntax-highlighted code block with window controls, configurable themes, line numbers,
+  and monospace typography.
 - `add_frame`: create an Excalidraw frame container (`name`, `x`, `y`, `w`, `h`) and optionally parent
   initial elements inside it.
 - `connect`: connect two existing shapes by ID (supports `elbowed=True/False`). The arrow starts and ends at
@@ -35,6 +37,7 @@ or approve calls.
 
 - `find_elements(query=None, type=None, frame_id=None, element_id=None, connected_to=None, include_bound_labels=False, limit=50)`:
   flexible query tool filtering active elements by text search, element type, frame membership, ID, or graph connectivity.
+- `list_fonts(category=None)`: discover and inspect all TrueType/OpenType fonts available in the execution environment.
 - `get_scene(offset=0, limit=50)`: returns up to 200 active elements per page,
   total count, current revision, and `has_more`.
 - `get_element(element_id)`: returns one active element and scene revision.
@@ -43,8 +46,10 @@ or approve calls.
 - `load(name)`: validates and replaces the active scene. A concurrent edit makes
   the operation fail instead of being overwritten. Persisted byte and document
   element limits are enforced before the active scene changes.
-- `preview(scale=1.0, padding=40)`: renders an inline PNG image preview of the active Excalidraw scene
+- `preview(scale=1.0, padding=40, background=true)`: renders an inline PNG image preview of the active Excalidraw scene
   directly into the MCP client conversation without writing a local file.
+- `export_png(name, directory=None, scale=1.0, padding=40, background=true, overwrite=false)`: exports the active diagram
+  directly to a PNG image file in a project folder or configured export directory.
 - `export_scene`: embeds a complete `.excalidraw` snapshot in the result without
   writing to disk, subject to `EXCALIDRAW_MAX_EXPORT_BYTES`.
 - `draw_architecture`: compatibility shorthand for comma/newline components such

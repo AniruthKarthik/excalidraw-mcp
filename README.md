@@ -188,13 +188,13 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
 }
 ```
 
-When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 24 tools with zero manual configuration.
+When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 27 tools with zero manual configuration.
 
 ---
 
 ## MCP Tools Reference
 
-The server exports 24 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
+The server exports 27 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
 
 ### 1. High-Level Generation
 
@@ -203,7 +203,7 @@ The server exports 24 typed tools designed with strict JSON schema bounds and ex
 | `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, edge routing, clustered frame grouping, and label wrapping. Returns stable logical-to-element ID mappings. |
 | `draw_architecture` | `prompt: str` (e.g., `"box: Frontend, db: Postgres"`)<br>Optional styles (`strokeColor`, `backgroundColor`, etc.) | `ArchitectureResult`<br>`{ revision, element_count, components }` | Rapid diagram generator parsing comma/newline-separated shorthand syntax (`box`, `circle`, `diamond`) with auto-connectors. |
 
-### 2. Primitive Shapes, Text & Frames
+### 2. Primitive Shapes, Text, Code Blocks & Frames
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
@@ -212,6 +212,7 @@ The server exports 24 typed tools designed with strict JSON schema bounds and ex
 | `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a decision diamond with an optional centered bound label, adaptive roundness, and frame membership. |
 | `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a directional arrow (straight or elbowed) with an optional midpoint label. |
 | `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles + `frame_id: str = None` | `CreateResult`<br>`{ id, revision }` | Creates a standalone text element with optional frame membership. |
+| `add_code_block` | `code: str`<br>`language: str = "python"`<br>`x: float = 0`, `y: float = 0`<br>`title: str = None`<br>`theme: str = "dark"`<br>`font_size: int = 14`<br>`line_numbers: bool = True`<br>`w: float = None`, `h: float = None`<br>`frame_id: str = None` | `CodeBlockResult`<br>`{ status, container_id, text_id, width, height, revision }` | Adds a syntax-highlighted code block with window controls, configurable themes, line numbers, and typography. |
 | `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id, revision }` | Binds two existing shapes with a self-docking straight or elbowed arrow that tracks shape movement. |
 | `add_frame` | `name: str = ""`, `x: float`, `y: float`, `w: float`, `h: float`<br>`element_ids: list[str] = None` | `CreateResult`<br>`{ id, revision }` | Creates an Excalidraw frame container and optionally parents specified elements inside it. |
 
@@ -232,13 +233,15 @@ The server exports 24 typed tools designed with strict JSON schema bounds and ex
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
 | `find_elements` | `query: str | None`<br>`type: str | None`<br>`frame_id: str | None`<br>`element_id: str | None`<br>`connected_to: str | None`<br>`include_bound_labels: bool = False`<br>`limit: int = 50` | `FindResult`<br>`{ matches, total, revision }` | Filters active elements by text search, element type, parent frame, ID, or graph connectivity. |
+| `list_fonts` | `category: str | None` (`sans-serif`, `monospace`, `serif`, `handwriting`) | `FontListResult`<br>`{ fonts, total, defaults }` | Discovers and lists available system fonts and semantic font categories. |
 | `get_scene` | `offset: int = 0`, `limit: int = 50` | `ScenePage`<br>`{ elements, total, offset, limit, has_more, revision }` | Paginated inspection of all elements currently on the canvas. |
 | `get_element` | `element_id: str` | `ElementResult`<br>`{ element, revision }` | Fetches details and properties of a single element by its ID. |
 | `list_saved_scenes`| None | `SavedScenesResult`<br>`{ scenes: list[str] }` | Returns a list of all scene files stored in the persistent directory. |
 | `save` | `name: str`, `overwrite: bool = False` | `SaveResult`<br>`{ name, revision, path }` | Atomically writes the scene to server disk in `.excalidraw` JSON format. |
 | `load` | `name: str` | `LoadResult`<br>`{ name, revision, element_count }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
 | `export_scene` | None | `EmbeddedResource`<br>(`application/vnd.excalidraw+json`) | Emits the entire `.excalidraw` schema v2 document directly into the MCP message. |
-| `preview` | `scale: float = 1.0`<br>`padding: int = 40` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
+| `preview` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
+| `export_png` | `name: str`<br>`directory: str | None = None`<br>`scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True`<br>`overwrite: bool = False` | `PngExportResult`<br>`{ status, name, path, bytes, width, height, scale, revision }` | Atomically exports the active scene directly to a PNG image file in a project folder or configured directory. |
 
 ---
 
@@ -259,6 +262,10 @@ The server operates with secure defaults and zero required environment variables
 | Variable | Default | Allowed Values | Description |
 |---|---|---|---|
 | `EXCALIDRAW_SCENE_DIR` | Platform User Data | Absolute path | Directory where scenes are persisted. Defaults to `$XDG_DATA_HOME/excalidraw-mcp/scenes` on Linux, and `~/Library/Application Support/excalidraw-mcp/scenes` on macOS. |
+| `EXCALIDRAW_EXPORT_DIR` | `$EXCALIDRAW_SCENE_DIR/exports` | Absolute path | Configurable directory where PNG diagram exports are saved by default. |
+| `EXCALIDRAW_DEFAULT_FONT` | Platform Sans Font | Font family name | Preferred system font family for regular diagram text and labels. |
+| `EXCALIDRAW_MONO_FONT` | Platform Monospace Font | Font family name | Preferred monospace font family for code blocks and code annotations. |
+| `EXCALIDRAW_FONT_DIR` | None | Directory path | Additional custom directory scanned for TrueType (`.ttf`) and OpenType (`.otf`) fonts. |
 | `EXCALIDRAW_HISTORY_LIMIT` | `20` | `1`–`100` | Maximum number of in-memory undo snapshots retained per session. |
 | `EXCALIDRAW_MAX_HISTORY_BYTES` | `104857600` (100 MiB) | 1 KiB–500 MiB | Shared memory ceiling allocated for serialized undo states. |
 | `EXCALIDRAW_MAX_SCENE_BYTES` | `26214400` (25 MiB) | 1 KiB–100 MiB | Maximum file size permitted when saving or loading scene files. |
@@ -290,7 +297,7 @@ pip install -e .
 
 ### 2. Run the Test Suite
 
-The test suite contains 143 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, and MCP schemas:
+The test suite contains 160 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, PNG export, fonts, code blocks, and MCP schemas:
 
 ```bash
 uv run python -B -m unittest discover -s tests -v
