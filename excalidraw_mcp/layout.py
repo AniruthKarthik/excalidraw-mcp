@@ -121,6 +121,165 @@ def layered_layout(
     return positioned
 
 
+def clustered_layout(
+    nodes,
+    edges,
+    clusters,
+    layout="layered",
+    direction="horizontal",
+    start_x=100,
+    start_y=100,
+    rank_gap=180,
+    node_gap=80,
+    cluster_padding=40,
+    cluster_gap=80,
+):
+    """Layout nodes grouped by clusters, wrapping each cluster in a frame."""
+    if direction not in ("horizontal", "vertical"):
+        raise SceneError("Layout direction must be horizontal or vertical")
+
+    cluster_lookup = {c["id"]: c.get("label", c["id"]) for c in clusters}
+    cluster_order = [c["id"] for c in clusters]
+
+    for node in nodes:
+        cid = node.get("cluster")
+        if cid and cid not in cluster_lookup:
+            raise SceneError(f"Unknown cluster '{cid}' on node '{node['id']}'")
+
+    positioned_nodes = []
+    frames = []
+
+    cursor_x, cursor_y = start_x, start_y
+
+    for cid in cluster_order:
+        c_label = cluster_lookup[cid]
+        c_nodes = [node for node in nodes if node.get("cluster") == cid]
+        if not c_nodes:
+            fw, fh = 240, 160
+            frames.append(
+                {
+                    "id": cid,
+                    "name": c_label,
+                    "x": cursor_x,
+                    "y": cursor_y,
+                    "w": fw,
+                    "h": fh,
+                }
+            )
+            if direction == "horizontal":
+                cursor_x += fw + cluster_gap
+            else:
+                cursor_y += fh + cluster_gap
+            continue
+
+        c_node_ids = {n["id"] for n in c_nodes}
+        c_edges = [
+            e
+            for e in edges
+            if e.get("source") in c_node_ids and e.get("target") in c_node_ids
+        ]
+
+        inner_start_x = cursor_x + cluster_padding
+        inner_start_y = cursor_y + cluster_padding + 20
+
+        if layout == "layered":
+            try:
+                c_pos = layered_layout(
+                    c_nodes,
+                    c_edges,
+                    direction=direction,
+                    start_x=inner_start_x,
+                    start_y=inner_start_y,
+                    rank_gap=rank_gap,
+                    node_gap=node_gap,
+                )
+            except SceneError:
+                c_pos = linear_layout(
+                    c_nodes,
+                    direction=direction,
+                    start_x=inner_start_x,
+                    start_y=inner_start_y,
+                    gap=node_gap,
+                )
+        else:
+            c_pos = linear_layout(
+                c_nodes,
+                direction=direction,
+                start_x=inner_start_x,
+                start_y=inner_start_y,
+                gap=node_gap,
+            )
+
+        min_x = min(n["x"] for n in c_pos)
+        min_y = min(n["y"] for n in c_pos)
+        max_x = max(n["x"] + n["w"] for n in c_pos)
+        max_y = max(n["y"] + n["h"] for n in c_pos)
+
+        fw = (max_x - min_x) + (2 * cluster_padding)
+        fh = (max_y - min_y) + (2 * cluster_padding + 20)
+        fx = min_x - cluster_padding
+        fy = min_y - (cluster_padding + 20)
+
+        frames.append(
+            {
+                "id": cid,
+                "name": c_label,
+                "x": fx,
+                "y": fy,
+                "w": fw,
+                "h": fh,
+            }
+        )
+
+        for n in c_pos:
+            positioned_nodes.append({**n, "frame_id": cid})
+
+        if direction == "horizontal":
+            cursor_x = fx + fw + cluster_gap
+        else:
+            cursor_y = fy + fh + cluster_gap
+
+    unclustered = [node for node in nodes if not node.get("cluster")]
+    if unclustered:
+        unclustered_ids = {n["id"] for n in unclustered}
+        u_edges = [
+            e
+            for e in edges
+            if e.get("source") in unclustered_ids and e.get("target") in unclustered_ids
+        ]
+        if layout == "layered":
+            try:
+                u_pos = layered_layout(
+                    unclustered,
+                    u_edges,
+                    direction=direction,
+                    start_x=cursor_x,
+                    start_y=cursor_y,
+                    rank_gap=rank_gap,
+                    node_gap=node_gap,
+                )
+            except SceneError:
+                u_pos = linear_layout(
+                    unclustered,
+                    direction=direction,
+                    start_x=cursor_x,
+                    start_y=cursor_y,
+                    gap=node_gap,
+                )
+        else:
+            u_pos = linear_layout(
+                unclustered,
+                direction=direction,
+                start_x=cursor_x,
+                start_y=cursor_y,
+                gap=node_gap,
+            )
+        for n in u_pos:
+            positioned_nodes.append({**n, "frame_id": None})
+
+    return positioned_nodes, frames
+
+
 def boundary_point(node, target, coincident_direction=1):
     cx, cy = node["x"] + node["w"] / 2, node["y"] + node["h"] / 2
     tx, ty = target["x"] + target["w"] / 2, target["y"] + target["h"] / 2

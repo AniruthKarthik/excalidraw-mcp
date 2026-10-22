@@ -25,6 +25,8 @@ Roughness = Annotated[int, Field(strict=True, ge=0, le=3)]
 FillStyle = Literal["solid", "hachure", "cross-hatch", "zigzag"]
 StrokeStyle = Literal["solid", "dashed", "dotted"]
 ShapeType = Literal["rectangle", "ellipse", "diamond"]
+ElementType = Literal["rectangle", "ellipse", "diamond", "arrow", "text", "frame"]
+Roundness = Literal["adaptive", "round", "sharp"]
 LayoutType = Literal["layered", "horizontal", "vertical"]
 Direction = Literal["horizontal", "vertical"]
 Offset = Annotated[int, Field(strict=True, ge=0)]
@@ -41,6 +43,15 @@ class GraphNode(BaseModel):
         str, Field(strict=True, min_length=1, max_length=2_000, pattern=r".*\S.*")
     ]
     shape: ShapeType = "rectangle"
+    cluster: ElementId | None = None
+
+
+class GraphCluster(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: ElementId
+    label: Annotated[
+        str, Field(strict=True, min_length=1, max_length=2_000, pattern=r".*\S.*")
+    ]
 
 
 class GraphEdge(BaseModel):
@@ -63,6 +74,7 @@ class CreateResult(TypedDict):
     diamond_id: NotRequired[str]
     arrow_id: NotRequired[str]
     text_id: NotRequired[str]
+    frame_id: NotRequired[str]
     label_id: NotRequired[str | None]
 
 
@@ -90,6 +102,82 @@ class GraphResult(TypedDict):
     edges: int
     node_map: dict[str, dict[str, str | None]]
     edge_map: dict[str, dict[str, str | None]]
+    cluster_map: NotRequired[dict[str, str]]
+    revision: int
+
+
+class BatchOperation(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    action: Literal[
+        "add_rectangle",
+        "add_circle",
+        "add_diamond",
+        "add_arrow",
+        "add_text",
+        "add_frame",
+        "connect",
+        "move",
+        "resize",
+        "update_element",
+        "delete",
+    ]
+    client_id: str | None = None
+    x: float | None = None
+    y: float | None = None
+    x2: float | None = None
+    y2: float | None = None
+    w: float | None = None
+    h: float | None = None
+    width: float | None = None
+    height: float | None = None
+    size: float | None = None
+    label: str | None = None
+    content: str | None = None
+    name: str | None = None
+    font_size: int | None = None
+    element_id: str | None = None
+    source_id: str | None = None
+    target_id: str | None = None
+    element_ids: list[str] | None = None
+    frame_id: str | None = None
+    elbowed: bool | None = None
+    roundness: Roundness | None = None
+    strokeColor: str | None = None
+    backgroundColor: str | None = None
+    fillStyle: FillStyle | None = None
+    strokeWidth: int | None = None
+    strokeStyle: StrokeStyle | None = None
+    opacity: int | None = None
+    roughness: int | None = None
+
+
+class BatchResult(TypedDict):
+    status: str
+    operations_executed: int
+    results: list[dict[str, Any]]
+    ref_map: dict[str, str]
+    revision: int
+
+
+class ElementSummary(TypedDict):
+    id: str
+    type: str
+    label: NotRequired[str | None]
+    name: NotRequired[str | None]
+    x: float
+    y: float
+    width: float
+    height: float
+    frame_id: NotRequired[str | None]
+    container_id: NotRequired[str | None]
+    bound_element_ids: list[str]
+    stroke_color: NotRequired[str | None]
+    background_color: NotRequired[str | None]
+
+
+class FindResult(TypedDict):
+    total: int
+    matches: list[ElementSummary]
     revision: int
 
 

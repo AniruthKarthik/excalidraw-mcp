@@ -14,7 +14,7 @@ from excalidraw_mcp.errors import SceneError
 from excalidraw_mcp.models import _finite_number, normalize_relationships, validate_document
 from excalidraw_mcp.validation import valid_color
 
-SUPPORTED_TYPES = frozenset({"rectangle", "ellipse", "diamond", "text", "arrow"})
+SUPPORTED_TYPES = frozenset({"rectangle", "ellipse", "diamond", "text", "arrow", "frame"})
 MIME_TYPE = "application/vnd.excalidraw+json"
 
 
@@ -209,10 +209,18 @@ def normalize_document(document, validate_assets=True):
             or el["strokeStyle"] not in ("solid", "dashed", "dotted")
         ):
             raise SceneError(f"Element {el['id']} has invalid style")
+        if el.get("roundness") is not None:
+            r = el["roundness"]
+            if not isinstance(r, dict) or type(r.get("type")) is not int or r["type"] not in (1, 2, 3):
+                raise SceneError(f"Element {el['id']} has invalid roundness")
         if el["type"] == "text":
             _normalize_text(el)
         elif el["type"] == "arrow":
             _normalize_arrow(el)
+        elif el["type"] == "frame":
+            if not isinstance(el.get("name", ""), str):
+                raise SceneError(f"Frame {el['id']} needs a string name")
+            el.setdefault("name", "")
         for field in ("width", "height"):
             _number(el, field, 0)
     normalize_relationships(result)

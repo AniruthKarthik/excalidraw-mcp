@@ -180,6 +180,9 @@ class StateTests(unittest.TestCase):
                 "get_scene",
                 "get_element",
                 "list_saved_scenes",
+                "add_frame",
+                "find_elements",
+                "batch_mutate",
             },
         )
         result = first["add_rectangle"](0, 0, 10, 10, label="A")

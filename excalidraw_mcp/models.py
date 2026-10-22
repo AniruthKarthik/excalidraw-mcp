@@ -116,6 +116,15 @@ def normalize_relationships(document: SceneDocument) -> None:
     reverse = {element_id: [] for element_id in active}
     labels = set()
     for el in active.values():
+        frame_id = el.get("frameId")
+        if frame_id is not None:
+            if (
+                not isinstance(frame_id, str)
+                or frame_id not in active
+                or frame_id == el["id"]
+                or active[frame_id]["type"] != "frame"
+            ):
+                raise SceneError(f"Invalid frameId for {el['id']}")
         container_id = el.get("containerId")
         if el["type"] == "text" and container_id is not None:
             if (

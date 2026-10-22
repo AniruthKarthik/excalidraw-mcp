@@ -28,15 +28,30 @@ def _apply_style(el: dict, style_kwargs: dict):
     el["version"] = 1
     el["versionNonce"] = random.randrange(1, 2**31)
     el["updated"] = time.time_ns() // 1_000_000
+
+    roundness_val = None
+    if "roundness" in style_kwargs and style_kwargs["roundness"] is not None:
+        r = style_kwargs["roundness"]
+        if r == "adaptive":
+            roundness_val = {"type": 3}
+        elif r == "round":
+            roundness_val = {"type": 2}
+        elif r == "sharp":
+            roundness_val = None
+        elif isinstance(r, dict):
+            roundness_val = r
+
+    frame_id = style_kwargs.get("frameId") or style_kwargs.get("frame_id")
+
     el.update(
         index=None,
         groupIds=[],
-        frameId=None,
+        frameId=frame_id,
         boundElements=[],
         link=None,
         locked=False,
         isDeleted=False,
-        roundness=None,
+        roundness=roundness_val,
     )
 
 
@@ -65,6 +80,20 @@ def diamond(x: int, y: int, w: int, h: int, **style):
     return _base_shape("diamond", x, y, w, h, **style)
 
 
+def frame(x: int, y: int, w: int, h: int, name: str = "", **style):
+    el = {
+        "id": str(uuid.uuid4()),
+        "type": "frame",
+        "name": name,
+        "x": x,
+        "y": y,
+        "width": w,
+        "height": h,
+    }
+    _apply_style(el, style)
+    return el
+
+
 def text(x: int, y: int, content: str, fontSize: int = 20, **style):
     content = content.replace("\r\n", "\n").replace("\r", "\n")
     el = {
@@ -88,7 +117,8 @@ def text(x: int, y: int, content: str, fontSize: int = 20, **style):
     return el
 
 
-def arrow(x, y, x2, y2, **style):
+def arrow(x, y, x2, y2, elbowed=False, **style):
+    is_elbowed = bool(style.pop("elbowed", elbowed))
     el = {
         "id": str(uuid.uuid4()),
         "type": "arrow",
@@ -102,7 +132,7 @@ def arrow(x, y, x2, y2, **style):
         "startArrowhead": None,
         "endArrowhead": "arrow",
         "lastCommittedPoint": None,
-        "elbowed": False,
+        "elbowed": is_elbowed,
     }
     _apply_style(el, style)
     return el

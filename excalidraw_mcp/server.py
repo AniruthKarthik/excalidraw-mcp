@@ -9,6 +9,8 @@ from mcp.types import ToolAnnotations
 
 from excalidraw_mcp.contracts import (
     ArchitectureResult,
+    BatchOperation,
+    BatchResult,
     Boolean,
     Color,
     ConnectResult,
@@ -19,8 +21,12 @@ from excalidraw_mcp.contracts import (
     Direction,
     ElementId,
     ElementResult,
+    ElementSummary,
+    ElementType,
     FillStyle,
+    FindResult,
     FontSize,
+    GraphCluster,
     GraphEdge,
     GraphNode,
     GraphResult,
@@ -34,6 +40,7 @@ from excalidraw_mcp.contracts import (
     PageLimit,
     ResizeResult,
     Roughness,
+    Roundness,
     SaveResult,
     SavedScenesResult,
     SceneName,
@@ -61,6 +68,7 @@ def _style_kwargs(
     strokeStyle: str | None = None,
     opacity: int | None = None,
     roughness: int | None = None,
+    roundness: str | None = None,
 ) -> dict:
     """Collect non-None style keyword arguments into a dict."""
     return {k: v for k, v in locals().items() if v is not None}
@@ -83,6 +91,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         w: Dimension,
         h: Dimension,
         label: Label = "",
+        roundness: Roundness | None = None,
+        frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
         fillStyle: FillStyle | None = None,
@@ -103,8 +113,11 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle=strokeStyle,
             opacity=opacity,
             roughness=roughness,
+            roundness=roundness,
         )
-        return invoke(service.add_shape, "rectangle", x, y, w, h, label, **style)
+        return invoke(
+            service.add_shape, "rectangle", x, y, w, h, label, frame_id=frame_id, **style
+        )
 
     @mcp.tool(annotations=MUTATING, run_in_thread=False)
     def add_circle(
@@ -112,6 +125,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         y: Coordinate,
         size: Dimension,
         label: Label = "",
+        frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
         fillStyle: FillStyle | None = None,
@@ -130,7 +144,9 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             opacity=opacity,
             roughness=roughness,
         )
-        return invoke(service.add_shape, "ellipse", x, y, size, size, label, **style)
+        return invoke(
+            service.add_shape, "ellipse", x, y, size, size, label, frame_id=frame_id, **style
+        )
 
     @mcp.tool(annotations=MUTATING, run_in_thread=False)
     def add_diamond(
@@ -139,6 +155,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         w: Dimension,
         h: Dimension,
         label: Label = "",
+        roundness: Roundness | None = None,
+        frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
         fillStyle: FillStyle | None = None,
@@ -156,8 +174,11 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle=strokeStyle,
             opacity=opacity,
             roughness=roughness,
+            roundness=roundness,
         )
-        return invoke(service.add_shape, "diamond", x, y, w, h, label, **style)
+        return invoke(
+            service.add_shape, "diamond", x, y, w, h, label, frame_id=frame_id, **style
+        )
 
     @mcp.tool(annotations=MUTATING, run_in_thread=False)
     def add_arrow(
@@ -166,6 +187,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         x2: Coordinate,
         y2: Coordinate,
         label: Label = "",
+        elbowed: Boolean = False,
         strokeColor: Color | None = None,
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
@@ -183,7 +205,47 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             opacity=opacity,
             roughness=roughness,
         )
-        return invoke(service.add_arrow, x, y, x2, y2, label, **style)
+        return invoke(service.add_arrow, x, y, x2, y2, label, elbowed=elbowed, **style)
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def add_frame(
+        name: Label,
+        x: Coordinate,
+        y: Coordinate,
+        w: Dimension,
+        h: Dimension,
+        element_ids: list[ElementId] | None = None,
+        strokeColor: Color | None = None,
+        backgroundColor: Color | None = None,
+        fillStyle: FillStyle | None = None,
+        strokeWidth: StrokeWidth | None = None,
+        strokeStyle: StrokeStyle | None = None,
+        opacity: Opacity | None = None,
+        roughness: Roughness | None = None,
+    ) -> CreateResult:
+        """Add a frame (boundary container) to the scene.
+
+        Optionally assign existing elements to this frame using `element_ids`.
+        """
+        style = _style_kwargs(
+            strokeColor=strokeColor,
+            backgroundColor=backgroundColor,
+            fillStyle=fillStyle,
+            strokeWidth=strokeWidth,
+            strokeStyle=strokeStyle,
+            opacity=opacity,
+            roughness=roughness,
+        )
+        return invoke(
+            service.add_frame,
+            name,
+            x,
+            y,
+            w,
+            h,
+            element_ids=element_ids,
+            **style,
+        )
 
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -245,6 +307,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         y: Coordinate,
         content: NonEmptyText,
         font_size: FontSize = 20,
+        frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         opacity: Opacity | None = None,
     ) -> CreateResult:
@@ -255,6 +318,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             y,
             content,
             font_size,
+            frame_id=frame_id,
             **_style_kwargs(strokeColor=strokeColor, opacity=opacity),
         )
 
@@ -265,6 +329,9 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def update_element(
         element_id: ElementId,
         label: Label | None = None,
+        roundness: Roundness | None = None,
+        frame_id: ElementId | None = None,
+        elbowed: Boolean | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
         fillStyle: FillStyle | None = None,
@@ -285,6 +352,9 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle,
             opacity,
             roughness,
+            roundness=roundness,
+            frame_id=frame_id,
+            elbowed=elbowed,
         )
 
     @mcp.tool(
@@ -302,6 +372,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         source_id: ElementId,
         target_id: ElementId,
         label: Label = "",
+        elbowed: Boolean = False,
         strokeColor: Color | None = None,
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
@@ -314,6 +385,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             source_id,
             target_id,
             label,
+            elbowed=elbowed,
             **_style_kwargs(
                 strokeColor=strokeColor,
                 strokeWidth=strokeWidth,
@@ -321,6 +393,38 @@ def create_server(service: SceneService | None = None) -> FastMCP:
                 opacity=opacity,
                 roughness=roughness,
             ),
+        )
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def find_elements(
+        query: str | None = None,
+        type: ElementType | None = None,
+        frame_id: ElementId | None = None,
+        element_id: ElementId | None = None,
+        connected_to: ElementId | None = None,
+        include_bound_labels: bool = False,
+        limit: PageLimit = 50,
+    ) -> FindResult:
+        """Find active elements matching query string, type, frame, or connection criteria."""
+        return invoke(
+            service.find_elements,
+            query=query,
+            type=type,
+            frame_id=frame_id,
+            element_id=element_id,
+            connected_to=connected_to,
+            include_bound_labels=include_bound_labels,
+            limit=limit,
+        )
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def batch_mutate(
+        operations: list[BatchOperation],
+    ) -> BatchResult:
+        """Atomically execute a batch of creation, editing, and deletion operations."""
+        return invoke(
+            service.batch_mutate,
+            [op.model_dump(exclude_unset=False) for op in operations],
         )
 
     @mcp.tool(
@@ -403,16 +507,24 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def draw_graph(
         nodes: list[GraphNode],
         edges: list[GraphEdge],
+        clusters: list[GraphCluster] | None = None,
         layout: LayoutType = "layered",
         direction: Direction = "horizontal",
+        elbowed: Boolean = False,
+        roundness: Roundness | None = None,
     ) -> GraphResult:
         """Replace the scene with a structured graph and return stable ID mappings."""
         return invoke(
             service.draw_graph,
             [node.model_dump() for node in nodes],
             [edge.model_dump() for edge in edges],
-            layout,
-            direction,
+            clusters=[cluster.model_dump() for cluster in clusters]
+            if clusters
+            else None,
+            layout=layout,
+            direction=direction,
+            elbowed=elbowed,
+            roundness=roundness,
         )
 
     return mcp
