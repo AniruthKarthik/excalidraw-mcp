@@ -43,6 +43,8 @@ or approve calls.
 - `load(name)`: validates and replaces the active scene. A concurrent edit makes
   the operation fail instead of being overwritten. Persisted byte and document
   element limits are enforced before the active scene changes.
+- `preview(scale=1.0, padding=40)`: renders an inline PNG image preview of the active Excalidraw scene
+  directly into the MCP client conversation without writing a local file.
 - `export_scene`: embeds a complete `.excalidraw` snapshot in the result without
   writing to disk, subject to `EXCALIDRAW_MAX_EXPORT_BYTES`.
 - `draw_architecture`: compatibility shorthand for comma/newline components such

@@ -94,9 +94,11 @@ class ReplacementTests(unittest.TestCase):
         self.assertEqual(self.scene.document()["files"], {})
         self.assertNotIn("custom", self.scene.document())
 
-    def test_preview_is_explicitly_unavailable(self):
-        with self.assertRaisesRegex(ToolError, "Use save"):
-            self.tools.preview()
+    def test_preview_renders_inline_image(self):
+        result = self.tools.preview()
+        self.assertIsNotNone(result)
+        self.assertEqual(result._mime_type, "image/png")
+        self.assertTrue(len(result._get_data()) > 0)
         self.assertEqual(self.scene.document(), self.original)
 
     def test_state_replacement_is_validated_and_detached(self):

@@ -238,7 +238,7 @@ The server exports 24 typed tools designed with strict JSON schema bounds and ex
 | `save` | `name: str`, `overwrite: bool = False` | `SaveResult`<br>`{ name, revision, path }` | Atomically writes the scene to server disk in `.excalidraw` JSON format. |
 | `load` | `name: str` | `LoadResult`<br>`{ name, revision, element_count }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
 | `export_scene` | None | `EmbeddedResource`<br>(`application/vnd.excalidraw+json`) | Emits the entire `.excalidraw` schema v2 document directly into the MCP message. |
-| `preview` | None | Error | Explicitly disabled by design. Prevents unauthenticated external uploads. |
+| `preview` | `scale: float = 1.0`<br>`padding: int = 40` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
 
 ---
 
@@ -290,7 +290,7 @@ pip install -e .
 
 ### 2. Run the Test Suite
 
-The test suite contains 140 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, and MCP schemas:
+The test suite contains 143 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, and MCP schemas:
 
 ```bash
 uv run python -B -m unittest discover -s tests -v

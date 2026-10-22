@@ -572,11 +572,20 @@ class SceneService:
             "status": "scene loaded",
         }
 
-    def preview(self):
-        raise SceneError(
-            "Browser preview is not implemented. Use save(name) for a server-local file "
-            "or export_scene() for an embedded document, then import it into Excalidraw."
-        )
+    def preview(self, scale=1.0, padding=40):
+        if not _finite_number(scale) or scale < 0.25 or scale > 4.0:
+            raise SceneError("scale must be a finite number between 0.25 and 4.0")
+        if (
+            not isinstance(padding, int)
+            or isinstance(padding, bool)
+            or padding < 0
+            or padding > 200
+        ):
+            raise SceneError("padding must be an integer between 0 and 200")
+        document, _ = self.state.snapshot()
+        from .renderer import render_scene_to_png
+
+        return render_scene_to_png(document, scale=scale, padding=padding)
 
     def draw_architecture(self, prompt, **style):
         revision = self.state.revision

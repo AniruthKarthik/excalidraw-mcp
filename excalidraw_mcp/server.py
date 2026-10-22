@@ -4,6 +4,7 @@ from hashlib import sha256
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.utilities.types import Image
 from mcp.types import EmbeddedResource, TextResourceContents
 from mcp.types import ToolAnnotations
 
@@ -38,6 +39,8 @@ from excalidraw_mcp.contracts import (
     Offset,
     Opacity,
     PageLimit,
+    PreviewPadding,
+    PreviewScale,
     ResizeResult,
     Roughness,
     Roundness,
@@ -463,9 +466,13 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         return invoke(service.read_saved_scene, name)
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
-    def preview():
-        """Preview is unavailable. Save a .excalidraw file and open it in Excalidraw."""
-        return invoke(service.preview)
+    def preview(
+        scale: PreviewScale = 1.0,
+        padding: PreviewPadding = 40,
+    ) -> Image:
+        """Render an inline PNG image preview of the active Excalidraw canvas."""
+        data = invoke(service.preview, scale=scale, padding=padding)
+        return Image(data=data, format="png")
 
     @mcp.tool(
         annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False),

@@ -510,5 +510,93 @@ class MCPProtocolContractTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("d1", batch_res.structured_content["ref_map"])
 
 
+            # 5. Test preview tool over MCP protocol
+            preview_res = await client.call_tool(
+                "preview",
+                {"scale": 1.5, "padding": 30},
+            )
+            self.assertFalse(preview_res.is_error)
+            self.assertIsNotNone(preview_res.content)
+            self.assertEqual(len(preview_res.content), 1)
+            img_content = preview_res.content[0]
+            self.assertEqual(img_content.type, "image")
+            self.assertEqual(img_content.mimeType, "image/png")
+            import base64
+
+            raw_bytes = base64.b64decode(img_content.data)
+            self.assertEqual(raw_bytes[:8], b"\x89PNG\r\n\x1a\n")
+
+
+class ImagePreviewTests(unittest.TestCase):
+    def setUp(self):
+        self.service = SceneService()
+        self.state = self.service.state
+
+    def test_empty_canvas_preview(self):
+        png = self.service.preview()
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+
+    def test_complex_scene_preview(self):
+        r = self.service.add_shape(
+            "rectangle",
+            100,
+            100,
+            120,
+            80,
+            label="Worker Node",
+            roundness="adaptive",
+            strokeColor="#0055aa",
+            backgroundColor="#eef5ff",
+        )
+        d = self.service.add_shape(
+            "diamond",
+            300,
+            100,
+            100,
+            80,
+            label="Decision",
+            strokeColor="#aa5500",
+            backgroundColor="#fff5ee",
+        )
+        c = self.service.add_shape(
+            "ellipse",
+            100,
+            260,
+            80,
+            80,
+            label="Database",
+            strokeColor="#00aa55",
+            backgroundColor="#eeffee",
+        )
+        self.service.connect(
+            r["rectangle_id"], d["diamond_id"], label="Process", elbowed=True
+        )
+        self.service.add_frame(
+            "Cluster VPC", 60, 60, 400, 320, element_ids=[r["rectangle_id"]]
+        )
+
+        png_1x = self.service.preview(scale=1.0, padding=40)
+        self.assertEqual(png_1x[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertGreater(len(png_1x), 1000)
+
+        png_2x = self.service.preview(scale=2.0, padding=20)
+        self.assertEqual(png_2x[:8], b"\x89PNG\r\n\x1a\n")
+        # Higher scale should yield more image data
+        self.assertGreater(len(png_2x), len(png_1x))
+
+    def test_preview_rejects_invalid_inputs(self):
+        with self.assertRaisesRegex(SceneError, "scale"):
+            self.service.preview(scale=0.1)
+
+        with self.assertRaisesRegex(SceneError, "scale"):
+            self.service.preview(scale=10.0)
+
+        with self.assertRaisesRegex(SceneError, "padding"):
+            self.service.preview(padding=-5)
+
+        with self.assertRaisesRegex(SceneError, "padding"):
+            self.service.preview(padding=500)
+
+
 if __name__ == "__main__":
     unittest.main()
