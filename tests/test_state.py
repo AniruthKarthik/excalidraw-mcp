@@ -183,6 +183,9 @@ class StateTests(unittest.TestCase):
                 "add_frame",
                 "find_elements",
                 "batch_mutate",
+                "export_png",
+                "add_code_block",
+                "list_fonts",
             },
         )
         result = first["add_rectangle"](0, 0, 10, 10, label="A")

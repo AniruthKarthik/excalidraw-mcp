@@ -290,12 +290,14 @@ source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "pillow" },
+    { name = "pygments" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=3.3.1,<4" },
     { name = "pillow", specifier = ">=13.0.0" },
+    { name = "pygments", specifier = ">=2.20.0" },
 ]
 
 [[package]]

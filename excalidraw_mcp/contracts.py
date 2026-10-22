@@ -27,6 +27,8 @@ StrokeStyle = Literal["solid", "dashed", "dotted"]
 ShapeType = Literal["rectangle", "ellipse", "diamond"]
 ElementType = Literal["rectangle", "ellipse", "diamond", "arrow", "text", "frame"]
 Roundness = Literal["adaptive", "round", "sharp"]
+CodeTheme = Literal["dark", "monokai", "github-dark", "light", "solarized-dark"]
+FontCategory = Literal["sans-serif", "monospace", "serif", "handwriting"]
 LayoutType = Literal["layered", "horizontal", "vertical"]
 Direction = Literal["horizontal", "vertical"]
 Offset = Annotated[int, Field(strict=True, ge=0)]
@@ -248,3 +250,36 @@ class ArchitectureResult(TypedDict):
     revision: int
     url: None
     next_step: str
+
+
+class PngExportResult(TypedDict):
+    status: str
+    name: str
+    path: str
+    bytes: int
+    width: int
+    height: int
+    scale: float
+    revision: int
+
+
+class CodeBlockResult(TypedDict):
+    status: str
+    container_id: str
+    text_id: str
+    width: float
+    height: float
+    revision: int
+
+
+class FontInfo(TypedDict):
+    family: str
+    style: str
+    category: str
+    path: str
+
+
+class FontListResult(TypedDict):
+    fonts: list[FontInfo]
+    total: int
+    defaults: dict[str, str]

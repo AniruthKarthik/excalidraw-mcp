@@ -1,7 +1,11 @@
-"""Image preview renderer for Excalidraw scenes.
+"""Image preview and export renderer for Excalidraw scenes.
 
-Renders active canvas elements into a PNG image preview suitable for inline
-display in MCP clients (Claude Desktop, Cursor, etc.).
+Renders canvas elements into PNG image bytes suitable for inline display
+in MCP clients and direct file exports. Features:
+- Comprehensive system font discovery & fallback
+- High-fidelity syntax-highlighted code blocks with themes
+- Clustered frames, decision diamonds, ellipses, and adaptive rounded rectangles
+- Multi-point and elbowed connectors with accurate arrowheads
 """
 
 import io
@@ -9,6 +13,9 @@ import math
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
+
+from excalidraw_mcp.code_blocks import get_theme, highlight_code
+from excalidraw_mcp.fonts import get_font
 
 
 def _parse_color(
@@ -46,10 +53,11 @@ def _parse_color(
             orig_a = int(hex_val[6:8], 16)
             return (r, g, b, int(orig_a * alpha_mul))
 
-    # Named fallback or dark default
-    if color_str.lower() in ("white", "#fff", "#ffffff"):
+    # Named fallback
+    low = color_str.lower()
+    if low in ("white", "#fff", "#ffffff"):
         return (255, 255, 255, int(255 * alpha_mul))
-    if color_str.lower() in ("black", "#000", "#000000"):
+    if low in ("black", "#000", "#000000"):
         return (0, 0, 0, int(255 * alpha_mul))
     return (30, 30, 30, int(255 * alpha_mul))
 
@@ -160,26 +168,16 @@ def _draw_arrowhead(
     draw.polygon([(tx, ty), (lx, ly), (rx, ry)], fill=fill)
 
 
-def _get_font(size: int) -> ImageFont.ImageFont:
-    """Load default scalable font with requested pixel size."""
-    try:
-        return ImageFont.load_default(size=max(8, size))
-    except Exception:
-        return ImageFont.load_default()
-
-
-def render_scene_to_png(
-    document: dict[str, Any], scale: float = 1.0, padding: int = 40
-) -> bytes:
-    """Render an Excalidraw document dictionary to PNG image bytes.
-
-    Args:
-        document: Standard Excalidraw schema dictionary.
-        scale: Resolution multiplier (0.25 to 4.0).
-        padding: Padding in pixels around bounding box.
+def render_scene_image(
+    document: dict[str, Any],
+    scale: float = 1.0,
+    padding: int = 40,
+    background: bool = True,
+) -> tuple[bytes, int, int]:
+    """Render an Excalidraw document dictionary to PNG image bytes and dimensions.
 
     Returns:
-        PNG binary data.
+        (png_bytes, width, height)
     """
     scale = max(0.25, min(4.0, float(scale)))
     padding = max(0, min(200, int(padding)))
@@ -189,9 +187,13 @@ def render_scene_to_png(
     ]
     app_state = document.get("appState") or {}
     bg_color_hex = app_state.get("viewBackgroundColor", "#ffffff")
-    bg_color = _parse_color(bg_color_hex, 100)
-    if bg_color[3] == 0:
-        bg_color = (255, 255, 255, 255)
+
+    if background:
+        bg_color = _parse_color(bg_color_hex, 100)
+        if bg_color[3] == 0:
+            bg_color = (255, 255, 255, 255)
+    else:
+        bg_color = (0, 0, 0, 0)
 
     min_x, min_y, max_x, max_y = _compute_bounds(elements)
 
@@ -210,8 +212,7 @@ def render_scene_to_png(
         return (wy - min_y + padding) * scale
 
     if not elements:
-        # Empty scene watermark
-        font = _get_font(int(18 * scale))
+        font = get_font("sans-serif", int(18 * scale))
         draw.text(
             (img_w / 2, img_h / 2),
             "(Empty Excalidraw Canvas)",
@@ -221,13 +222,17 @@ def render_scene_to_png(
         )
         buf = io.BytesIO()
         image.save(buf, format="PNG")
-        return buf.getvalue()
+        return buf.getvalue(), img_w, img_h
 
-    # Partition elements by rendering phase:
-    # 1. Frames (background container)
-    # 2. Geometric Shapes (rectangles, diamonds, ellipses)
-    # 3. Connectors & Arrows
-    # 4. Text & Labels (top layer)
+    # Identify bound text elements of code blocks so they are not rendered twice
+    code_block_text_ids = set()
+    for el in elements:
+        if el.get("customData", {}).get("type") == "code_block":
+            for b in el.get("boundElements", []):
+                if b.get("type") == "text":
+                    code_block_text_ids.add(b["id"])
+
+    # Categorize elements for layered rendering
     frames = []
     shapes = []
     arrows = []
@@ -242,7 +247,8 @@ def render_scene_to_png(
         elif etype == "arrow":
             arrows.append(el)
         elif etype == "text":
-            texts.append(el)
+            if el.get("id") not in code_block_text_ids:
+                texts.append(el)
 
     # 1. Render Frames
     for f in frames:
@@ -252,7 +258,6 @@ def render_scene_to_png(
         fh = f.get("height", 0) * scale
         frame_color = (180, 180, 190, 255)
 
-        # Dashed border
         _draw_dashed_line(draw, (fx, fy), (fx + fw, fy), frame_color, width=2)
         _draw_dashed_line(
             draw, (fx + fw, fy), (fx + fw, fy + fh), frame_color, width=2
@@ -262,9 +267,8 @@ def render_scene_to_png(
         )
         _draw_dashed_line(draw, (fx, fy + fh), (fx, fy), frame_color, width=2)
 
-        # Frame name badge
         name = f.get("name") or "Frame"
-        f_font = _get_font(int(12 * scale))
+        f_font = get_font("sans-serif", int(12 * scale), bold=True)
         draw.text(
             (fx + 6 * scale, fy + 4 * scale),
             name,
@@ -272,13 +276,20 @@ def render_scene_to_png(
             font=f_font,
         )
 
-    # 2. Render Shapes
+    # 2. Render Shapes & Code Blocks
     for s in shapes:
         sx = tx(s.get("x", 0))
         sy = ty(s.get("y", 0))
         sw = s.get("width", 0) * scale
         sh = s.get("height", 0) * scale
         stype = s.get("type")
+
+        custom_data = s.get("customData") or {}
+
+        # Specialized rendering for Code Blocks
+        if custom_data.get("type") == "code_block":
+            _render_code_block(draw, s, sx, sy, sw, sh, scale)
+            continue
 
         opacity = s.get("opacity", 100)
         stroke_color = _parse_color(s.get("strokeColor", "#1e1e1e"), opacity)
@@ -380,7 +391,8 @@ def render_scene_to_png(
         px = tx(t.get("x", 0))
         py = ty(t.get("y", 0))
         font_size = int(t.get("fontSize", 20) * scale)
-        font = _get_font(font_size)
+        font_fam = t.get("fontFamily") or t.get("customData", {}).get("fontFamily")
+        font = get_font(font_fam, font_size)
         opacity = t.get("opacity", 100)
         stroke_color = _parse_color(t.get("strokeColor", "#1e1e1e"), opacity)
         text_align = t.get("textAlign", "left")
@@ -393,7 +405,155 @@ def render_scene_to_png(
             align=text_align,
         )
 
-    # Save to buffer and return bytes
+    # Save to buffer and return bytes and dimensions
     output = io.BytesIO()
     image.save(output, format="PNG")
-    return output.getvalue()
+    return output.getvalue(), img_w, img_h
+
+
+def _render_code_block(
+    draw: ImageDraw.ImageDraw,
+    element: dict[str, Any],
+    sx: float,
+    sy: float,
+    sw: float,
+    sh: float,
+    scale: float,
+):
+    """Render a syntax-highlighted code block with window controls and line numbers."""
+    custom_data = element.get("customData", {})
+    code = custom_data.get("code", "")
+    language = custom_data.get("language", "python")
+    title = custom_data.get("title") or f"{language} code"
+    theme_name = custom_data.get("theme", "dark")
+    font_size = int(custom_data.get("font_size", 14) * scale)
+    font_fam = custom_data.get("font_family", "monospace")
+    show_line_nums = custom_data.get("line_numbers", True)
+
+    theme = get_theme(theme_name)
+    bg_color = _parse_color(theme["bg"])
+    border_color = _parse_color(theme["border"])
+    title_bg = _parse_color(theme["title_bg"])
+    title_color = _parse_color(theme["title_text"])
+    gutter_text_color = _parse_color(theme["gutter_text"])
+    gutter_border_color = _parse_color(theme["gutter_border"])
+
+    radius = max(6, int(10 * scale))
+    # Outer box
+    draw.rounded_rectangle(
+        [sx, sy, sx + sw, sy + sh],
+        radius=radius,
+        fill=bg_color,
+        outline=border_color,
+        width=max(1, int(1 * scale)),
+    )
+
+    # Title bar
+    title_h = 32.0 * scale
+    draw.rounded_rectangle(
+        [sx, sy, sx + sw, sy + title_h],
+        radius=radius,
+        fill=title_bg,
+        outline=None,
+    )
+    # Fill bottom corners of title bar so it flushes with the lower rectangle
+    draw.rectangle(
+        [sx, sy + title_h - radius, sx + sw, sy + title_h],
+        fill=title_bg,
+    )
+    # Title bar divider
+    draw.line(
+        [(sx, sy + title_h), (sx + sw, sy + title_h)],
+        fill=border_color,
+        width=1,
+    )
+
+    # Window control buttons (macOS style dots)
+    dot_r = 4.5 * scale
+    dot_y = sy + title_h / 2
+    # Red
+    draw.ellipse(
+        [sx + 14 * scale - dot_r, dot_y - dot_r, sx + 14 * scale + dot_r, dot_y + dot_r],
+        fill=_parse_color("#ff5f56"),
+    )
+    # Yellow
+    draw.ellipse(
+        [sx + 26 * scale - dot_r, dot_y - dot_r, sx + 26 * scale + dot_r, dot_y + dot_r],
+        fill=_parse_color("#ffbd2e"),
+    )
+    # Green
+    draw.ellipse(
+        [sx + 38 * scale - dot_r, dot_y - dot_r, sx + 38 * scale + dot_r, dot_y + dot_r],
+        fill=_parse_color("#27c93f"),
+    )
+
+    # Title label
+    title_font = get_font("sans-serif", int(11 * scale), bold=True)
+    draw.text(
+        (sx + 54 * scale, sy + (title_h - 11 * scale) / 2),
+        title,
+        fill=title_color,
+        font=title_font,
+    )
+
+    # Highlight code lines
+    code_lines = highlight_code(code, language, theme_name)
+    line_count = len(code_lines)
+    digits = len(str(line_count))
+    gutter_char_w = 8.0 * scale
+    gutter_w = max(32.0 * scale, (digits + 2) * gutter_char_w) if show_line_nums else 0.0
+
+    # Draw gutter line
+    if show_line_nums:
+        draw.line(
+            [(sx + gutter_w, sy + title_h), (sx + gutter_w, sy + sh)],
+            fill=gutter_border_color,
+            width=1,
+        )
+
+    code_font = get_font(font_fam or "monospace", font_size)
+    line_h = max(14.0 * scale, font_size * 1.35)
+
+    gutter_font = get_font(font_fam or "monospace", max(9, int(font_size * 0.9)))
+
+    start_y = sy + title_h + 10.0 * scale
+    for line_idx, line_tokens in enumerate(code_lines):
+        line_y = start_y + line_idx * line_h
+        if line_y + line_h > sy + sh:
+            break
+
+        # Line number
+        if show_line_nums:
+            num_str = str(line_idx + 1)
+            draw.text(
+                (sx + gutter_w - 10.0 * scale, line_y),
+                num_str,
+                fill=gutter_text_color,
+                font=gutter_font,
+                anchor="ra",
+            )
+
+        # Code tokens
+        cur_x = sx + gutter_w + 12.0 * scale
+        for token_text, hex_c in line_tokens:
+            if cur_x >= sx + sw - 8.0 * scale:
+                break
+            tok_color = _parse_color(hex_c)
+            draw.text((cur_x, line_y), token_text, fill=tok_color, font=code_font)
+            cur_x += draw.textlength(token_text, font=code_font)
+
+
+def render_scene_to_png(
+    document: dict[str, Any],
+    scale: float = 1.0,
+    padding: int = 40,
+    background: bool = True,
+) -> bytes:
+    """Render an Excalidraw document dictionary to PNG image bytes."""
+    data, _, _ = render_scene_image(
+        document=document,
+        scale=scale,
+        padding=padding,
+        background=background,
+    )
+    return data

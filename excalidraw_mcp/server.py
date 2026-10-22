@@ -13,6 +13,8 @@ from excalidraw_mcp.contracts import (
     BatchOperation,
     BatchResult,
     Boolean,
+    CodeBlockResult,
+    CodeTheme,
     Color,
     ConnectResult,
     Coordinate,
@@ -27,6 +29,8 @@ from excalidraw_mcp.contracts import (
     FillStyle,
     FindResult,
     FontSize,
+    FontCategory,
+    FontListResult,
     GraphCluster,
     GraphEdge,
     GraphNode,
@@ -39,6 +43,7 @@ from excalidraw_mcp.contracts import (
     Offset,
     Opacity,
     PageLimit,
+    PngExportResult,
     PreviewPadding,
     PreviewScale,
     ResizeResult,
@@ -469,10 +474,78 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def preview(
         scale: PreviewScale = 1.0,
         padding: PreviewPadding = 40,
+        background: Boolean = True,
     ) -> Image:
         """Render an inline PNG image preview of the active Excalidraw canvas."""
-        data = invoke(service.preview, scale=scale, padding=padding)
+        data = invoke(
+            service.preview,
+            scale=scale,
+            padding=padding,
+            background=background,
+        )
         return Image(data=data, format="png")
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructiveHint=False, openWorldHint=True),
+        run_in_thread=False,
+    )
+    def export_png(
+        name: SceneName,
+        directory: str | None = None,
+        scale: PreviewScale = 1.0,
+        padding: PreviewPadding = 40,
+        background: Boolean = True,
+        overwrite: Boolean = False,
+    ) -> PngExportResult:
+        """Export the active scene to a PNG image file in a project or configured directory."""
+        return invoke(
+            service.export_png,
+            name=name,
+            directory=directory,
+            scale=scale,
+            padding=padding,
+            background=background,
+            overwrite=overwrite,
+        )
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def add_code_block(
+        code: str,
+        language: str = "python",
+        x: Coordinate = 0,
+        y: Coordinate = 0,
+        title: str | None = None,
+        theme: CodeTheme = "dark",
+        font_size: FontSize = 14,
+        font_family: str | None = "monospace",
+        line_numbers: Boolean = True,
+        w: Dimension | None = None,
+        h: Dimension | None = None,
+        frame_id: ElementId | None = None,
+    ) -> CodeBlockResult:
+        """Add a syntax-highlighted code block with window controls and line numbers."""
+        return invoke(
+            service.add_code_block,
+            code=code,
+            language=language,
+            x=x,
+            y=y,
+            title=title,
+            theme=theme,
+            font_size=font_size,
+            font_family=font_family,
+            line_numbers=line_numbers,
+            w=w,
+            h=h,
+            frame_id=frame_id,
+        )
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def list_fonts(
+        category: FontCategory | None = None,
+    ) -> FontListResult:
+        """Discover and list available system fonts and semantic font categories."""
+        return invoke(service.list_fonts, category=category)
 
     @mcp.tool(
         annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False),

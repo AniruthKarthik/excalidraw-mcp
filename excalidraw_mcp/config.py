@@ -19,6 +19,16 @@ def scene_directory():
     return root
 
 
+def export_directory():
+    configured = os.environ.get("EXCALIDRAW_EXPORT_DIR")
+    if configured:
+        root = Path(configured).expanduser()
+        if not root.is_absolute():
+            raise ValueError("EXCALIDRAW_EXPORT_DIR must be an absolute path")
+        return root
+    return scene_directory() / "exports"
+
+
 def default_scene_directory():
     """Return a writable per-user data location without touching the filesystem."""
     if sys.platform == "darwin":

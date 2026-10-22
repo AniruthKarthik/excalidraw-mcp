@@ -1,5 +1,10 @@
 """Scene operations independent of MCP transport and server globals."""
 
+import os
+import re
+import uuid
+from pathlib import Path
+
 from excalidraw_mcp.config import max_export_bytes
 from excalidraw_mcp.elements import arrow, bind_text, diamond, ellipse, frame, rect, text
 from excalidraw_mcp.errors import SceneError
@@ -572,7 +577,7 @@ class SceneService:
             "status": "scene loaded",
         }
 
-    def preview(self, scale=1.0, padding=40):
+    def preview(self, scale=1.0, padding=40, background=True):
         if not _finite_number(scale) or scale < 0.25 or scale > 4.0:
             raise SceneError("scale must be a finite number between 0.25 and 4.0")
         if (
@@ -585,7 +590,175 @@ class SceneService:
         document, _ = self.state.snapshot()
         from .renderer import render_scene_to_png
 
-        return render_scene_to_png(document, scale=scale, padding=padding)
+        return render_scene_to_png(
+            document, scale=scale, padding=padding, background=bool(background)
+        )
+
+    def export_png(
+        self,
+        name,
+        directory=None,
+        scale=1.0,
+        padding=40,
+        background=True,
+        overwrite=False,
+    ):
+        if not isinstance(name, str) or not name.strip():
+            raise SceneError("PNG export name cannot be empty")
+
+        clean_name = name.strip()
+        if clean_name.lower().endswith(".png"):
+            clean_name = clean_name[:-4].strip()
+
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", clean_name):
+            raise SceneError(
+                "Export name must be 1–128 letters, digits, underscores, dots or hyphens, "
+                "starting with a letter or digit"
+            )
+
+        if not _finite_number(scale) or scale < 0.25 or scale > 4.0:
+            raise SceneError("scale must be a finite number between 0.25 and 4.0")
+
+        if (
+            not isinstance(padding, int)
+            or isinstance(padding, bool)
+            or padding < 0
+            or padding > 200
+        ):
+            raise SceneError("padding must be an integer between 0 and 200")
+
+        from .config import export_directory
+        from .renderer import render_scene_image
+
+        if directory is not None:
+            if not isinstance(directory, (str, Path)) or not str(directory).strip():
+                raise SceneError("directory must be a non-empty string or path")
+            target_dir = Path(directory).expanduser()
+            if not target_dir.is_absolute():
+                target_dir = (Path.cwd() / target_dir).resolve()
+        else:
+            target_dir = export_directory().resolve()
+
+        try:
+            target_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        except OSError as exc:
+            raise SceneError(f"Could not create export directory: {exc.strerror}") from exc
+
+        target_file = target_dir / f"{clean_name}.png"
+
+        if target_file.exists():
+            if target_file.is_dir() or target_file.is_symlink():
+                raise SceneError(
+                    "Export destination exists and is not a regular file"
+                )
+            if not overwrite:
+                raise SceneError(
+                    f"Export file '{target_file.name}' already exists; use overwrite=true to replace it"
+                )
+
+        document, revision = self.state.snapshot()
+        png_bytes, width, height = render_scene_image(
+            document, scale=scale, padding=padding, background=bool(background)
+        )
+
+        temp_name = f".export-{uuid.uuid4().hex}.tmp"
+        temp_file = target_dir / temp_name
+
+        try:
+            with open(temp_file, "wb") as stream:
+                stream.write(png_bytes)
+                stream.flush()
+                os.fsync(stream.fileno())
+
+            os.replace(temp_file, target_file)
+        except OSError as exc:
+            try:
+                temp_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise SceneError(f"Could not write PNG export: {exc.strerror}") from exc
+
+        return {
+            "status": "png exported",
+            "name": f"{clean_name}.png",
+            "path": str(target_file.resolve()),
+            "bytes": len(png_bytes),
+            "width": width,
+            "height": height,
+            "scale": scale,
+            "revision": revision,
+        }
+
+    def add_code_block(
+        self,
+        code,
+        language="python",
+        x=0,
+        y=0,
+        title=None,
+        theme="dark",
+        font_size=14,
+        font_family="monospace",
+        line_numbers=True,
+        w=None,
+        h=None,
+        frame_id=None,
+    ):
+        if not isinstance(code, str) or not code.strip():
+            raise SceneError("code block content cannot be empty")
+        if not _finite_number(x) or not _finite_number(y):
+            raise SceneError("x and y coordinates must be finite numbers")
+        if font_size is not None and (
+            not isinstance(font_size, int) or font_size < 8 or font_size > 100
+        ):
+            raise SceneError("font_size must be an integer between 8 and 100")
+        if w is not None and (not _finite_number(w) or w <= 0):
+            raise SceneError("w must be a positive finite number")
+        if h is not None and (not _finite_number(h) or h <= 0):
+            raise SceneError("h must be a positive finite number")
+
+        from .code_blocks import create_code_block
+
+        container, text_el = create_code_block(
+            x=x,
+            y=y,
+            code=code,
+            language=language or "python",
+            title=title,
+            theme=theme or "dark",
+            font_size=font_size or 14,
+            font_family=font_family or "monospace",
+            line_numbers=bool(line_numbers),
+            w=w,
+            h=h,
+            frame_id=frame_id,
+        )
+
+        ids = self.state.add_many([container, text_el])
+        return {
+            "status": "code block created",
+            "container_id": ids[0],
+            "text_id": ids[1],
+            "width": container["width"],
+            "height": container["height"],
+            "revision": self.state.revision,
+        }
+
+    def list_fonts(self, category=None):
+        from .fonts import list_fonts as sys_list_fonts
+
+        raw_fonts = sys_list_fonts(category=category)
+        defaults = {
+            "sans-serif": os.environ.get("EXCALIDRAW_DEFAULT_FONT")
+            or "Adwaita Sans / Droid Sans / System Sans",
+            "monospace": os.environ.get("EXCALIDRAW_MONO_FONT")
+            or "JetBrains Mono / Adwaita Mono / System Mono",
+        }
+        return {
+            "fonts": raw_fonts,
+            "total": len(raw_fonts),
+            "defaults": defaults,
+        }
 
     def draw_architecture(self, prompt, **style):
         revision = self.state.revision
@@ -998,6 +1171,55 @@ class SceneService:
                     res = {"action": "add_text", "text_id": txt_el["id"]}
                     if client_id:
                         ref_map[client_id] = txt_el["id"]
+                    results.append(res)
+
+                elif action == "add_code_block":
+                    code = op.get("code")
+                    if not isinstance(code, str) or not code.strip():
+                        raise SceneError(
+                            f"Operation {i} (add_code_block): code cannot be empty"
+                        )
+                    x = op.get("x", 0)
+                    y = op.get("y", 0)
+                    if not _finite_number(x) or not _finite_number(y):
+                        raise SceneError(
+                            f"Operation {i} (add_code_block): coordinates must be finite numbers"
+                        )
+                    lang = op.get("language", "python")
+                    title = op.get("title")
+                    theme = op.get("theme", "dark")
+                    f_size = op.get("font_size", 14)
+                    f_fam = op.get("font_family", "monospace")
+                    ln = op.get("line_numbers", True)
+                    w = op.get("w")
+                    h = op.get("h")
+                    fid = resolve(op.get("frame_id"))
+                    from .code_blocks import create_code_block
+
+                    c_box, c_txt = create_code_block(
+                        x=x,
+                        y=y,
+                        code=code,
+                        language=lang,
+                        title=title,
+                        theme=theme,
+                        font_size=f_size,
+                        font_family=f_fam,
+                        line_numbers=ln,
+                        w=w,
+                        h=h,
+                        frame_id=fid,
+                    )
+                    document["elements"].extend([c_box, c_txt])
+                    index[c_box["id"]] = c_box
+                    index[c_txt["id"]] = c_txt
+                    res = {
+                        "action": "add_code_block",
+                        "container_id": c_box["id"],
+                        "text_id": c_txt["id"],
+                    }
+                    if client_id:
+                        ref_map[client_id] = c_box["id"]
                     results.append(res)
 
                 elif action == "connect":
