@@ -119,11 +119,16 @@ class BatchOperation(BaseModel):
         "add_arrow",
         "add_text",
         "add_frame",
+        "add_code_block",
         "connect",
         "move",
         "resize",
         "update_element",
         "delete",
+        "lock",
+        "unlock",
+        "group",
+        "ungroup",
     ]
     client_id: str | None = None
     x: float | None = None
@@ -143,6 +148,7 @@ class BatchOperation(BaseModel):
     source_id: str | None = None
     target_id: str | None = None
     element_ids: list[str] | None = None
+    group_id: str | None = None
     frame_id: str | None = None
     elbowed: bool | None = None
     roundness: Roundness | None = None
@@ -283,3 +289,61 @@ class FontListResult(TypedDict):
     fonts: list[FontInfo]
     total: int
     defaults: dict[str, str]
+
+
+class LockResult(TypedDict):
+    status: str
+    element_ids: list[str]
+    revision: int
+
+
+class UnlockResult(TypedDict):
+    status: str
+    element_ids: list[str]
+    revision: int
+
+
+class GroupResult(TypedDict):
+    status: str
+    group_id: str
+    element_ids: list[str]
+    revision: int
+
+
+class UngroupResult(TypedDict):
+    status: str
+    affected_elements: list[str]
+    removed_group_ids: list[str]
+    revision: int
+
+
+class ViewportResult(TypedDict):
+    scroll_x: float
+    scroll_y: float
+    zoom: float
+    view_background_color: str
+    revision: int
+
+
+class FocusResult(TypedDict):
+    status: str
+    scroll_x: float
+    scroll_y: float
+    zoom: float
+    bounding_box: dict[str, float]
+    focused_element_ids: list[str]
+    revision: int
+
+
+class SceneSummaryResult(TypedDict):
+    element_count: int
+    type_counts: dict[str, int]
+    frames: list[dict[str, Any]]
+    groups: list[dict[str, Any]]
+    connectors: list[dict[str, Any]]
+    code_blocks: list[dict[str, Any]]
+    standalone_elements: list[str]
+    bounds: dict[str, float] | None
+    description: str
+    revision: int
+

@@ -28,6 +28,7 @@ from excalidraw_mcp.contracts import (
     ElementType,
     FillStyle,
     FindResult,
+    FocusResult,
     FontSize,
     FontCategory,
     FontListResult,
@@ -35,9 +36,11 @@ from excalidraw_mcp.contracts import (
     GraphEdge,
     GraphNode,
     GraphResult,
+    GroupResult,
     Label,
     LayoutType,
     LoadResult,
+    LockResult,
     MoveResult,
     NonEmptyText,
     Offset,
@@ -53,11 +56,15 @@ from excalidraw_mcp.contracts import (
     SavedScenesResult,
     SceneName,
     ScenePage,
+    SceneSummaryResult,
     StatusResult,
     StrokeStyle,
     StrokeWidth,
     UndoResult,
+    UnlockResult,
+    UngroupResult,
     UpdateResult,
+    ViewportResult,
 )
 from excalidraw_mcp.document import MIME_TYPE
 from excalidraw_mcp.service import SceneService
@@ -606,6 +613,96 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             elbowed=elbowed,
             roundness=roundness,
         )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def lock_elements(element_ids: list[ElementId]) -> LockResult:
+        """Lock elements and their bound labels to protect them from unintended mutations."""
+        return invoke(service.lock_elements, element_ids)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def unlock_elements(element_ids: list[ElementId]) -> UnlockResult:
+        """Unlock previously locked elements and their bound labels."""
+        return invoke(service.unlock_elements, element_ids)
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def group_elements(element_ids: list[ElementId]) -> GroupResult:
+        """Group multiple elements together so they move and behave as a cohesive group."""
+        return invoke(service.group_elements, element_ids)
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def ungroup_elements(
+        element_ids: list[ElementId] | None = None,
+        group_id: str | None = None,
+    ) -> UngroupResult:
+        """Disband an element group by group_id or remove elements from their groups."""
+        return invoke(service.ungroup_elements, element_ids=element_ids, group_id=group_id)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def draw_mermaid(
+        mermaid_code: NonEmptyText,
+        direction: Direction | None = None,
+        layout: LayoutType = "layered",
+        elbowed: Boolean = False,
+        roundness: Roundness | None = None,
+    ) -> GraphResult:
+        """Parse Mermaid flowchart/graph code and render it directly to the Excalidraw scene."""
+        return invoke(
+            service.draw_mermaid,
+            mermaid_code=mermaid_code,
+            direction=direction,
+            layout=layout,
+            elbowed=elbowed,
+            roundness=roundness,
+        )
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def get_viewport() -> ViewportResult:
+        """Get current canvas camera viewport settings (scroll coordinates, zoom level, background color)."""
+        return invoke(service.get_viewport)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def set_viewport(
+        scroll_x: Coordinate | None = None,
+        scroll_y: Coordinate | None = None,
+        zoom: float | None = None,
+        background_color: Color | None = None,
+    ) -> ViewportResult:
+        """Set canvas camera viewport scroll offsets, zoom level, or background color."""
+        return invoke(
+            service.set_viewport,
+            scroll_x=scroll_x,
+            scroll_y=scroll_y,
+            zoom=zoom,
+            background_color=background_color,
+        )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def focus_elements(
+        element_ids: list[ElementId] | None = None,
+        padding: PreviewPadding = 50,
+    ) -> FocusResult:
+        """Center and zoom the viewport camera to frame specified elements or the entire diagram."""
+        return invoke(service.focus_elements, element_ids=element_ids, padding=padding)
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def get_scene_summary() -> SceneSummaryResult:
+        """Get a structured semantic overview and topological summary of the diagram for LLM understanding."""
+        return invoke(service.get_scene_summary)
 
     return mcp
 

@@ -208,7 +208,9 @@ class SceneService:
     def delete(self, element_id):
         def remove(document):
             index = _active(document)
-            _require(index, element_id)
+            el = _require(index, element_id)
+            if el.get("locked"):
+                raise SceneError(f"Cannot delete locked element '{element_id}'")
             removed = {element_id}
             removed.update(
                 el["id"] for el in index.values() if el.get("containerId") == element_id
@@ -238,6 +240,8 @@ class SceneService:
         def move_elements(document):
             index = _active(document)
             el = _require(index, element_id)
+            if el.get("locked"):
+                raise SceneError(f"Cannot move locked element '{element_id}'")
             if el.get("containerId"):
                 raise SceneError(
                     "Move the label's container instead of moving bound text independently"
@@ -247,6 +251,28 @@ class SceneService:
                 return {"status": "moved", "element_id": element_id, "x": x, "y": y}
             if el["type"] == "arrow" and el.get("elbowed"):
                 raise SceneError("Moving elbowed arrows is not supported yet")
+
+            grouped_members = []
+            if el.get("groupIds"):
+                target_groups = set(el["groupIds"])
+                for other in index.values():
+                    if other["id"] != element_id and any(
+                        g in target_groups for g in other.get("groupIds", [])
+                    ):
+                        if other.get("locked"):
+                            raise SceneError(
+                                f"Cannot move locked element '{other['id']}' in group"
+                            )
+                        grouped_members.append(other)
+
+            if el["type"] == "frame":
+                for child in index.values():
+                    if child.get("frameId") == element_id:
+                        if child.get("locked"):
+                            raise SceneError(
+                                f"Cannot move locked element '{child['id']}' in frame"
+                            )
+
             _translate(el, dx, dy)
             moved_targets = {element_id}
             owned_labels = {
@@ -254,6 +280,9 @@ class SceneService:
                 for label in index.values()
                 if label.get("containerId")
             }
+            for member in grouped_members:
+                _translate(member, dx, dy)
+                moved_targets.add(member["id"])
             if el["type"] == "frame":
                 for child in index.values():
                     if child.get("frameId") == element_id:
@@ -302,6 +331,8 @@ class SceneService:
         def resize_element(document):
             index = _active(document)
             el = _require(index, element_id)
+            if el.get("locked"):
+                raise SceneError(f"Cannot resize locked element '{element_id}'")
             if el["type"] not in (*SHAPES, "frame"):
                 raise SceneError(
                     "Only rectangle, ellipse and diamond elements can be resized"
@@ -367,6 +398,8 @@ class SceneService:
         def update(document):
             index = _active(document)
             el = _require(index, element_id)
+            if el.get("locked"):
+                raise SceneError(f"Cannot update locked element '{element_id}'")
 
             if frame_id is not None:
                 if frame_id == "":
@@ -1322,6 +1355,10 @@ class SceneService:
                             f"Operation {i} (move): element_id, finite x and y are required"
                         )
                     el = _require(index, eid)
+                    if el.get("locked"):
+                        raise SceneError(
+                            f"Operation {i} (move): cannot move locked element '{eid}'"
+                        )
                     if el.get("containerId"):
                         raise SceneError(
                             "Move the label's container instead of moving bound text independently"
@@ -1332,6 +1369,18 @@ class SceneService:
                             raise SceneError(
                                 "Moving elbowed arrows is not supported yet"
                             )
+                        grouped_members = []
+                        if el.get("groupIds"):
+                            target_groups = set(el["groupIds"])
+                            for other in index.values():
+                                if other["id"] != eid and any(
+                                    g in target_groups for g in other.get("groupIds", [])
+                                ):
+                                    if other.get("locked"):
+                                        raise SceneError(
+                                            f"Operation {i} (move): cannot move locked element '{other['id']}' in group"
+                                        )
+                                    grouped_members.append(other)
                         _translate(el, dx, dy)
                         moved_targets = {eid}
                         owned_labels = {
@@ -1339,9 +1388,16 @@ class SceneService:
                             for lbl in index.values()
                             if lbl.get("containerId")
                         }
+                        for member in grouped_members:
+                            _translate(member, dx, dy)
+                            moved_targets.add(member["id"])
                         if el["type"] == "frame":
                             for child in index.values():
                                 if child.get("frameId") == eid:
+                                    if child.get("locked"):
+                                        raise SceneError(
+                                            f"Operation {i} (move): cannot move locked element '{child['id']}' in frame"
+                                        )
                                     _translate(child, dx, dy)
                                     moved_targets.add(child["id"])
                         for lbl in index.values():
@@ -1404,6 +1460,10 @@ class SceneService:
                             f"Operation {i} (resize): element_id, positive width and height required"
                         )
                     el = _require(index, eid)
+                    if el.get("locked"):
+                        raise SceneError(
+                            f"Operation {i} (resize): cannot resize locked element '{eid}'"
+                        )
                     if el["type"] not in (*SHAPES, "frame"):
                         raise SceneError(
                             f"Operation {i} (resize): only rectangle, ellipse, diamond, frame can be resized"
@@ -1435,6 +1495,10 @@ class SceneService:
                             f"Operation {i} (update_element): element_id is required"
                         )
                     el = _require(index, eid)
+                    if el.get("locked"):
+                        raise SceneError(
+                            f"Operation {i} (update_element): cannot update locked element '{eid}'"
+                        )
                     label = op.get("label")
                     style_keys = (
                         "strokeColor",
@@ -1564,7 +1628,11 @@ class SceneService:
                         raise SceneError(
                             f"Operation {i} (delete): element_id is required"
                         )
-                    _require(index, eid)
+                    el = _require(index, eid)
+                    if el.get("locked"):
+                        raise SceneError(
+                            f"Operation {i} (delete): cannot delete locked element '{eid}'"
+                        )
                     removed = {eid}
                     removed.update(
                         el["id"]
@@ -1590,6 +1658,127 @@ class SceneService:
                             "action": "delete",
                             "status": "deleted",
                             "element_id": eid,
+                        }
+                    )
+
+                elif action == "lock":
+                    eids = resolve_list(op.get("element_ids")) or (
+                        [resolve(op.get("element_id"))] if op.get("element_id") else []
+                    )
+                    if not eids:
+                        raise SceneError(
+                            f"Operation {i} (lock): element_ids or element_id required"
+                        )
+                    locked_ids = []
+                    for target_eid in eids:
+                        el = _require(index, target_eid)
+                        el["locked"] = True
+                        locked_ids.append(target_eid)
+                        lbl = _label_for(index, target_eid)
+                        if lbl:
+                            lbl["locked"] = True
+                            locked_ids.append(lbl["id"])
+                    results.append(
+                        {
+                            "action": "lock",
+                            "status": "locked",
+                            "element_ids": locked_ids,
+                        }
+                    )
+
+                elif action == "unlock":
+                    eids = resolve_list(op.get("element_ids")) or (
+                        [resolve(op.get("element_id"))] if op.get("element_id") else []
+                    )
+                    if not eids:
+                        raise SceneError(
+                            f"Operation {i} (unlock): element_ids or element_id required"
+                        )
+                    unlocked_ids = []
+                    for target_eid in eids:
+                        el = _require(index, target_eid)
+                        el["locked"] = False
+                        unlocked_ids.append(target_eid)
+                        lbl = _label_for(index, target_eid)
+                        if lbl:
+                            lbl["locked"] = False
+                            unlocked_ids.append(lbl["id"])
+                    results.append(
+                        {
+                            "action": "unlock",
+                            "status": "unlocked",
+                            "element_ids": unlocked_ids,
+                        }
+                    )
+
+                elif action == "group":
+                    import uuid
+
+                    eids = resolve_list(op.get("element_ids"))
+                    if not eids or len(eids) < 2:
+                        raise SceneError(
+                            f"Operation {i} (group): requires at least 2 element IDs"
+                        )
+                    for target_eid in eids:
+                        _require(index, target_eid)
+                    gid = f"grp_{uuid.uuid4().hex[:12]}"
+                    for target_eid in eids:
+                        el = index[target_eid]
+                        grps = el.setdefault("groupIds", [])
+                        if gid not in grps:
+                            grps.append(gid)
+                        lbl = _label_for(index, target_eid)
+                        if lbl:
+                            lbl_grps = lbl.setdefault("groupIds", [])
+                            if gid not in lbl_grps:
+                                lbl_grps.append(gid)
+                    results.append(
+                        {
+                            "action": "group",
+                            "status": "grouped",
+                            "group_id": gid,
+                            "element_ids": eids,
+                        }
+                    )
+
+                elif action == "ungroup":
+                    target_gid = op.get("group_id")
+                    eids = resolve_list(op.get("element_ids"))
+                    if not target_gid and not eids:
+                        raise SceneError(
+                            f"Operation {i} (ungroup): group_id or element_ids required"
+                        )
+                    affected = set()
+                    removed_groups = set()
+                    if target_gid:
+                        removed_groups.add(target_gid)
+                        for el in index.values():
+                            grps = el.get("groupIds", [])
+                            if target_gid in grps:
+                                el["groupIds"] = [g for g in grps if g != target_gid]
+                                affected.add(el["id"])
+                    if eids:
+                        for target_eid in eids:
+                            el = _require(index, target_eid)
+                            grps = el.get("groupIds", [])
+                            if grps:
+                                p = grps.pop()
+                                removed_groups.add(p)
+                                affected.add(target_eid)
+                                lbl = _label_for(index, target_eid)
+                                if lbl:
+                                    lbl_grps = lbl.get("groupIds", [])
+                                    if p in lbl_grps:
+                                        lbl["groupIds"] = [
+                                            g for g in lbl_grps if g != p
+                                        ]
+                                        affected.add(lbl["id"])
+                    results.append(
+                        {
+                            "action": "ungroup",
+                            "status": "ungrouped",
+                            "affected_elements": sorted(affected),
+                            "removed_group_ids": sorted(removed_groups),
                         }
                     )
 
@@ -1817,3 +2006,466 @@ class SceneService:
         if clusters:
             result["cluster_map"] = cluster_map
         return result
+
+    def lock_elements(self, element_ids):
+        if not isinstance(element_ids, list) or not element_ids:
+            raise SceneError("element_ids must be a non-empty list of element IDs")
+
+        def apply_lock(document):
+            index = _active(document)
+            locked_ids = []
+            for eid in element_ids:
+                if not isinstance(eid, str) or not eid.strip():
+                    raise SceneError("Element ID must be a non-empty string")
+                el = _require(index, eid)
+                el["locked"] = True
+                locked_ids.append(eid)
+                lbl = _label_for(index, eid)
+                if lbl:
+                    lbl["locked"] = True
+                    locked_ids.append(lbl["id"])
+            return {
+                "status": "locked",
+                "element_ids": locked_ids,
+            }
+
+        res = self.state.apply(apply_lock)
+        return {**res, "revision": self.state.revision}
+
+    def unlock_elements(self, element_ids):
+        if not isinstance(element_ids, list) or not element_ids:
+            raise SceneError("element_ids must be a non-empty list of element IDs")
+
+        def apply_unlock(document):
+            index = _active(document)
+            unlocked_ids = []
+            for eid in element_ids:
+                if not isinstance(eid, str) or not eid.strip():
+                    raise SceneError("Element ID must be a non-empty string")
+                el = _require(index, eid)
+                el["locked"] = False
+                unlocked_ids.append(eid)
+                lbl = _label_for(index, eid)
+                if lbl:
+                    lbl["locked"] = False
+                    unlocked_ids.append(lbl["id"])
+            return {
+                "status": "unlocked",
+                "element_ids": unlocked_ids,
+            }
+
+        res = self.state.apply(apply_unlock)
+        return {**res, "revision": self.state.revision}
+
+    def group_elements(self, element_ids):
+        if not isinstance(element_ids, list) or len(element_ids) < 2:
+            raise SceneError("Grouping requires a list of at least 2 element IDs")
+        if len(set(element_ids)) != len(element_ids):
+            raise SceneError("element_ids cannot contain duplicate IDs")
+
+        def apply_group(document):
+            import uuid
+
+            index = _active(document)
+            for eid in element_ids:
+                if not isinstance(eid, str) or not eid.strip():
+                    raise SceneError("Element ID must be a non-empty string")
+                _require(index, eid)
+
+            group_id = f"grp_{uuid.uuid4().hex[:12]}"
+            for eid in element_ids:
+                el = index[eid]
+                groups = el.setdefault("groupIds", [])
+                if group_id not in groups:
+                    groups.append(group_id)
+                lbl = _label_for(index, eid)
+                if lbl:
+                    lbl_groups = lbl.setdefault("groupIds", [])
+                    if group_id not in lbl_groups:
+                        lbl_groups.append(group_id)
+
+            return {
+                "status": "grouped",
+                "group_id": group_id,
+                "element_ids": element_ids,
+            }
+
+        res = self.state.apply(apply_group)
+        return {**res, "revision": self.state.revision}
+
+    def ungroup_elements(self, element_ids=None, group_id=None):
+        if not element_ids and not group_id:
+            raise SceneError("Provide either group_id or element_ids to ungroup")
+
+        def apply_ungroup(document):
+            index = _active(document)
+            affected = set()
+            removed_groups = set()
+
+            if group_id:
+                if not isinstance(group_id, str) or not group_id.strip():
+                    raise SceneError("group_id must be a non-empty string")
+                removed_groups.add(group_id)
+                for el in index.values():
+                    groups = el.get("groupIds", [])
+                    if group_id in groups:
+                        el["groupIds"] = [g for g in groups if g != group_id]
+                        affected.add(el["id"])
+
+            if element_ids:
+                if not isinstance(element_ids, list) or not element_ids:
+                    raise SceneError("element_ids must be a non-empty list of IDs")
+                for eid in element_ids:
+                    el = _require(index, eid)
+                    groups = el.get("groupIds", [])
+                    if groups:
+                        popped = groups.pop()
+                        removed_groups.add(popped)
+                        affected.add(eid)
+                        lbl = _label_for(index, eid)
+                        if lbl:
+                            lbl_groups = lbl.get("groupIds", [])
+                            if popped in lbl_groups:
+                                lbl["groupIds"] = [
+                                    g for g in lbl_groups if g != popped
+                                ]
+                                affected.add(lbl["id"])
+
+            return {
+                "status": "ungrouped",
+                "affected_elements": sorted(affected),
+                "removed_group_ids": sorted(removed_groups),
+            }
+
+        res = self.state.apply(apply_ungroup)
+        return {**res, "revision": self.state.revision}
+
+    def draw_mermaid(
+        self,
+        mermaid_code: str,
+        direction: str | None = None,
+        layout: str = "layered",
+        elbowed: bool = False,
+        roundness: str | None = None,
+    ):
+        from .mermaid import parse_mermaid
+
+        nodes, edges, clusters, parsed_direction, parsed_layout = parse_mermaid(
+            mermaid_code=mermaid_code,
+            direction=direction,
+            layout=layout,
+        )
+        return self.draw_graph(
+            nodes=[node.model_dump() for node in nodes],
+            edges=[edge.model_dump() for edge in edges],
+            clusters=[cluster.model_dump() for cluster in clusters]
+            if clusters
+            else None,
+            layout=parsed_layout,
+            direction=parsed_direction,
+            elbowed=elbowed,
+            roundness=roundness,
+        )
+
+    def get_viewport(self):
+        doc, revision = self.state.snapshot()
+        app_state = doc.get("appState") or {}
+        zoom_obj = app_state.get("zoom")
+        zoom_val = (
+            zoom_obj.get("value", 1.0)
+            if isinstance(zoom_obj, dict)
+            else 1.0
+        )
+        scroll_x = float(app_state.get("scrollX", 0.0))
+        scroll_y = float(app_state.get("scrollY", 0.0))
+        bg = str(app_state.get("viewBackgroundColor", "#ffffff"))
+        return {
+            "scroll_x": scroll_x,
+            "scroll_y": scroll_y,
+            "zoom": zoom_val,
+            "view_background_color": bg,
+            "revision": revision,
+        }
+
+    def set_viewport(
+        self,
+        scroll_x=None,
+        scroll_y=None,
+        zoom=None,
+        background_color=None,
+    ):
+        if scroll_x is not None and not _finite_number(scroll_x):
+            raise SceneError("scroll_x must be a finite number")
+        if scroll_y is not None and not _finite_number(scroll_y):
+            raise SceneError("scroll_y must be a finite number")
+        if zoom is not None:
+            if not _finite_number(zoom) or zoom <= 0 or zoom > 50.0:
+                raise SceneError(
+                    "zoom must be a positive number between 0.01 and 50.0"
+                )
+        if background_color is not None:
+            import re
+            from .validation import COLOR_PATTERN
+
+            if not re.match(f"^{COLOR_PATTERN}$", background_color):
+                raise SceneError(
+                    f"Invalid hex color format: {background_color}"
+                )
+
+        def apply_viewport(document):
+            app_state = document.setdefault("appState", {})
+            if scroll_x is not None:
+                app_state["scrollX"] = float(scroll_x)
+            if scroll_y is not None:
+                app_state["scrollY"] = float(scroll_y)
+            if zoom is not None:
+                app_state["zoom"] = {"value": float(zoom)}
+            if background_color is not None:
+                app_state["viewBackgroundColor"] = background_color
+
+            zoom_val = (
+                app_state.get("zoom", {}).get("value", 1.0)
+                if isinstance(app_state.get("zoom"), dict)
+                else 1.0
+            )
+            return {
+                "scroll_x": float(app_state.get("scrollX", 0.0)),
+                "scroll_y": float(app_state.get("scrollY", 0.0)),
+                "zoom": zoom_val,
+                "view_background_color": str(
+                    app_state.get("viewBackgroundColor", "#ffffff")
+                ),
+            }
+
+        res = self.state.apply(apply_viewport)
+        return {**res, "revision": self.state.revision}
+
+    def focus_elements(
+        self,
+        element_ids=None,
+        padding=50.0,
+        viewport_width=1920.0,
+        viewport_height=1080.0,
+    ):
+        if not _finite_number(padding) or padding < 0:
+            raise SceneError("padding must be a non-negative number")
+        if not _finite_number(viewport_width) or viewport_width <= 0:
+            raise SceneError("viewport_width must be a positive number")
+        if not _finite_number(viewport_height) or viewport_height <= 0:
+            raise SceneError("viewport_height must be a positive number")
+
+        def apply_focus(document):
+            index = _active(document)
+            if element_ids is not None:
+                if not isinstance(element_ids, list) or not element_ids:
+                    raise SceneError(
+                        "element_ids must be a non-empty list of IDs"
+                    )
+                targets = []
+                for eid in element_ids:
+                    targets.append(_require(index, eid))
+            else:
+                targets = [
+                    el
+                    for el in document["elements"]
+                    if not el.get("isDeleted")
+                ]
+
+            if not targets:
+                app_state = document.setdefault("appState", {})
+                app_state["scrollX"] = 0.0
+                app_state["scrollY"] = 0.0
+                app_state["zoom"] = {"value": 1.0}
+                return {
+                    "status": "focused",
+                    "scroll_x": 0.0,
+                    "scroll_y": 0.0,
+                    "zoom": 1.0,
+                    "bounding_box": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "width": 0.0,
+                        "height": 0.0,
+                    },
+                    "focused_element_ids": [],
+                }
+
+            min_x = min(el["x"] for el in targets)
+            min_y = min(el["y"] for el in targets)
+            max_x = max(el["x"] + el.get("width", 0) for el in targets)
+            max_y = max(el["y"] + el.get("height", 0) for el in targets)
+            bb_w = max(1.0, max_x - min_x)
+            bb_h = max(1.0, max_y - min_y)
+
+            avail_w = max(50.0, viewport_width - 2 * padding)
+            avail_h = max(50.0, viewport_height - 2 * padding)
+            fit_zoom = min(2.0, max(0.05, min(avail_w / bb_w, avail_h / bb_h)))
+
+            center_x = min_x + bb_w / 2
+            center_y = min_y + bb_h / 2
+            scroll_x = (viewport_width / 2) - center_x * fit_zoom
+            scroll_y = (viewport_height / 2) - center_y * fit_zoom
+
+            app_state = document.setdefault("appState", {})
+            app_state["scrollX"] = scroll_x
+            app_state["scrollY"] = scroll_y
+            app_state["zoom"] = {"value": fit_zoom}
+
+            return {
+                "status": "focused",
+                "scroll_x": scroll_x,
+                "scroll_y": scroll_y,
+                "zoom": fit_zoom,
+                "bounding_box": {
+                    "x": min_x,
+                    "y": min_y,
+                    "width": bb_w,
+                    "height": bb_h,
+                },
+                "focused_element_ids": [el["id"] for el in targets],
+            }
+
+        res = self.state.apply(apply_focus)
+        return {**res, "revision": self.state.revision}
+
+    def get_scene_summary(self):
+        doc, revision = self.state.snapshot()
+        index = _active(doc)
+        elements = [el for el in doc["elements"] if not el.get("isDeleted")]
+
+        type_counts = {}
+        for el in elements:
+            t = el.get("type", "unknown")
+            type_counts[t] = type_counts.get(t, 0) + 1
+
+        frames = []
+        groups_map = {}
+        connectors = []
+        code_blocks = []
+        connected_shape_ids = set()
+
+        for el in elements:
+            for gid in el.get("groupIds", []):
+                groups_map.setdefault(gid, []).append(el["id"])
+
+            if el["type"] == "frame":
+                children = [
+                    c["id"] for c in elements if c.get("frameId") == el["id"]
+                ]
+                frames.append(
+                    {
+                        "id": el["id"],
+                        "name": el.get("name", ""),
+                        "x": el["x"],
+                        "y": el["y"],
+                        "width": el["width"],
+                        "height": el["height"],
+                        "children_count": len(children),
+                        "children_ids": children,
+                    }
+                )
+
+            elif el["type"] == "arrow":
+                src = (el.get("startBinding") or {}).get("elementId")
+                tgt = (el.get("endBinding") or {}).get("elementId")
+                if src:
+                    connected_shape_ids.add(src)
+                if tgt:
+                    connected_shape_ids.add(tgt)
+                lbl = _label_for(index, el["id"])
+                connectors.append(
+                    {
+                        "id": el["id"],
+                        "source": src,
+                        "target": tgt,
+                        "label": lbl.get("text") if lbl else None,
+                        "elbowed": el.get("elbowed", False),
+                    }
+                )
+
+            custom_data = el.get("customData") or {}
+            if custom_data.get("type") == "code-block":
+                code_blocks.append(
+                    {
+                        "container_id": el["id"],
+                        "language": custom_data.get("language", "text"),
+                        "title": custom_data.get("title"),
+                        "lines_count": custom_data.get("lines_count", 0),
+                    }
+                )
+
+        groups = [
+            {"group_id": gid, "element_ids": ids}
+            for gid, ids in groups_map.items()
+        ]
+
+        standalone_elements = []
+        for el in elements:
+            if el["type"] not in ("arrow", "frame") and not el.get(
+                "containerId"
+            ):
+                if (
+                    el["id"] not in connected_shape_ids
+                    and not el.get("frameId")
+                    and not el.get("groupIds")
+                ):
+                    standalone_elements.append(el["id"])
+
+        bounds = None
+        if elements:
+            min_x = min(el["x"] for el in elements)
+            min_y = min(el["y"] for el in elements)
+            max_x = max(el["x"] + el.get("width", 0) for el in elements)
+            max_y = max(el["y"] + el.get("height", 0) for el in elements)
+            bounds = {
+                "min_x": min_x,
+                "min_y": min_y,
+                "max_x": max_x,
+                "max_y": max_y,
+                "width": max_x - min_x,
+                "height": max_y - min_y,
+            }
+
+        desc_parts = [
+            f"Scene (revision {revision}) contains {len(elements)} active elements: "
+            + ", ".join(f"{cnt} {t}" for t, cnt in sorted(type_counts.items()))
+            + "."
+        ]
+        if frames:
+            desc_parts.append(
+                f"Contains {len(frames)} frame container(s): "
+                + ", ".join(
+                    f"'{f['name'] or f['id']}' ({f['children_count']} children)"
+                    for f in frames
+                )
+                + "."
+            )
+        if connectors:
+            desc_parts.append(
+                f"Defines {len(connectors)} connector flow(s) linking {len(connected_shape_ids)} node(s)."
+            )
+        if code_blocks:
+            desc_parts.append(
+                f"Includes {len(code_blocks)} code block(s) ({', '.join(cb['language'] for cb in code_blocks)})."
+            )
+        if groups:
+            desc_parts.append(
+                f"Organized into {len(groups)} multi-element group(s)."
+            )
+        if bounds:
+            desc_parts.append(
+                f"Canvas bounds span from ({bounds['min_x']:.0f}, {bounds['min_y']:.0f}) to ({bounds['max_x']:.0f}, {bounds['max_y']:.0f}) [dimensions: {bounds['width']:.0f}x{bounds['height']:.0f}]."
+            )
+
+        return {
+            "element_count": len(elements),
+            "type_counts": type_counts,
+            "frames": frames,
+            "groups": groups,
+            "connectors": connectors,
+            "code_blocks": code_blocks,
+            "standalone_elements": standalone_elements,
+            "bounds": bounds,
+            "description": " ".join(desc_parts),
+            "revision": revision,
+        }

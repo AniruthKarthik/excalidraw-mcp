@@ -186,6 +186,15 @@ class StateTests(unittest.TestCase):
                 "export_png",
                 "add_code_block",
                 "list_fonts",
+                "lock_elements",
+                "unlock_elements",
+                "group_elements",
+                "ungroup_elements",
+                "draw_mermaid",
+                "get_viewport",
+                "set_viewport",
+                "focus_elements",
+                "get_scene_summary",
             },
         )
         result = first["add_rectangle"](0, 0, 10, 10, label="A")

@@ -188,19 +188,20 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
 }
 ```
 
-When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 27 tools with zero manual configuration.
+When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 36 tools with zero manual configuration.
 
 ---
 
 ## MCP Tools Reference
 
-The server exports 27 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
+The server exports 36 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
 
 ### 1. High-Level Generation
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
 | `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, edge routing, clustered frame grouping, and label wrapping. Returns stable logical-to-element ID mappings. |
+| `draw_mermaid` | `mermaid_code: str`<br>`direction: str | None = None`<br>`layout: str = "layered"`<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ status, nodes, edges, node_map, edge_map, cluster_map, revision }` | Parses Mermaid flowchart/graph syntax (`graph TD`, `flowchart LR`, subgraphs, node shapes, edge styles) and renders directly to Excalidraw. |
 | `draw_architecture` | `prompt: str` (e.g., `"box: Frontend, db: Postgres"`)<br>Optional styles (`strokeColor`, `backgroundColor`, etc.) | `ArchitectureResult`<br>`{ revision, element_count, components }` | Rapid diagram generator parsing comma/newline-separated shorthand syntax (`box`, `circle`, `diamond`) with auto-connectors. |
 
 ### 2. Primitive Shapes, Text, Code Blocks & Frames
@@ -220,18 +221,26 @@ The server exports 27 typed tools designed with strict JSON schema bounds and ex
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Moving a frame moves all contained elements; bound labels and attached connectors follow automatically. |
-| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows. |
-| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment. |
-| `delete` | `element_id: str` | `DeleteResult`<br>`{ deleted_id, deleted_label_id, revision }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows. |
-| `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, or update actions in a single revision step with dynamic `client_id` resolution. |
+| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Moving a frame moves all contained elements; moving grouped elements moves group members together; rejects locked elements. |
+| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows; rejects locked elements. |
+| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment; rejects locked elements. |
+| `delete` | `element_id: str` | `DeleteResult`<br>`{ deleted_id, deleted_label_id, revision }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows; rejects locked elements. |
+| `group_elements` | `element_ids: list[str]` | `GroupResult`<br>`{ status, group_id, element_ids, revision }` | Groups multiple elements together so that movements and transformations apply cohesively. |
+| `ungroup_elements` | `element_ids: list[str] = None`<br>`group_id: str = None` | `UngroupResult`<br>`{ status, affected_elements, removed_group_ids, revision }` | Disbands an element group by `group_id` or removes outermost groups from specified elements. |
+| `lock_elements` | `element_ids: list[str]` | `LockResult`<br>`{ status, element_ids, revision }` | Locks elements and bound labels to protect them from unintended moves, resizes, updates, or deletions. |
+| `unlock_elements` | `element_ids: list[str]` | `UnlockResult`<br>`{ status, element_ids, revision }` | Unlocks previously locked elements and bound labels for subsequent editing. |
+| `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, lock, group, or update actions in a single revision step with dynamic `client_id` resolution. |
 | `clear` | None | `DeleteResult`<br>`{ deleted: true, revision }` | Wipes the entire scene, active elements, and embedded state. |
 | `undo` | None | `UndoResult`<br>`{ restored_revision, available_history }` | Rolls back the scene to the state immediately preceding the latest mutation. |
 
-### 4. Inspection, Query, Export & Storage
+### 4. Inspection, Viewport, Query, Export & Storage
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
+| `get_scene_summary` | None | `SceneSummaryResult`<br>`{ element_count, type_counts, frames, groups, connectors, code_blocks, standalone_elements, bounds, description, revision }` | Provides a structured semantic overview and topological understanding of the entire diagram for AI agent reasoning. |
+| `get_viewport` | None | `ViewportResult`<br>`{ scroll_x, scroll_y, zoom, view_background_color, revision }` | Inspects current canvas camera scroll coordinates, zoom factor, and background color. |
+| `set_viewport` | `scroll_x: float = None`<br>`scroll_y: float = None`<br>`zoom: float = None`<br>`background_color: str = None` | `ViewportResult`<br>`{ scroll_x, scroll_y, zoom, view_background_color, revision }` | Updates canvas camera viewport scroll offsets, zoom level, or background canvas color. |
+| `focus_elements` | `element_ids: list[str] = None`<br>`padding: int = 50` | `FocusResult`<br>`{ status, scroll_x, scroll_y, zoom, bounding_box, focused_element_ids, revision }` | Automatically calculates bounding box, centers camera, and sets fit zoom to frame specified elements or the entire diagram. |
 | `find_elements` | `query: str | None`<br>`type: str | None`<br>`frame_id: str | None`<br>`element_id: str | None`<br>`connected_to: str | None`<br>`include_bound_labels: bool = False`<br>`limit: int = 50` | `FindResult`<br>`{ matches, total, revision }` | Filters active elements by text search, element type, parent frame, ID, or graph connectivity. |
 | `list_fonts` | `category: str | None` (`sans-serif`, `monospace`, `serif`, `handwriting`) | `FontListResult`<br>`{ fonts, total, defaults }` | Discovers and lists available system fonts and semantic font categories. |
 | `get_scene` | `offset: int = 0`, `limit: int = 50` | `ScenePage`<br>`{ elements, total, offset, limit, has_more, revision }` | Paginated inspection of all elements currently on the canvas. |
