@@ -188,21 +188,22 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
 }
 ```
 
-When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 36 tools with zero manual configuration.
+When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 46 tools with zero manual configuration.
 
 ---
 
 ## MCP Tools Reference
 
-The server exports 36 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
+The server exports 46 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
 
-### 1. High-Level Generation
+### 1. High-Level Generation & Design Guidance
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
 | `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, edge routing, clustered frame grouping, and label wrapping. Returns stable logical-to-element ID mappings. |
 | `draw_mermaid` | `mermaid_code: str`<br>`direction: str | None = None`<br>`layout: str = "layered"`<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ status, nodes, edges, node_map, edge_map, cluster_map, revision }` | Parses Mermaid flowchart/graph syntax (`graph TD`, `flowchart LR`, subgraphs, node shapes, edge styles) and renders directly to Excalidraw. |
 | `draw_architecture` | `prompt: str` (e.g., `"box: Frontend, db: Postgres"`)<br>Optional styles (`strokeColor`, `backgroundColor`, etc.) | `ArchitectureResult`<br>`{ revision, element_count, components }` | Rapid diagram generator parsing comma/newline-separated shorthand syntax (`box`, `circle`, `diamond`) with auto-connectors. |
+| `read_diagram_guide` | `topic: str | None = None` (`layout`, `colors`, `typography`, `grouping`, `arrows`, `spacing`) | `DiagramGuideResult`<br>`{ topic, guide, available_topics }` | Practical diagram design guidelines covering 60-30-10 color rules, semantic palettes, standard node dimensions, margins, arrow routing, and readability. |
 
 ### 2. Primitive Shapes, Text, Code Blocks & Frames
 
@@ -221,6 +222,7 @@ The server exports 36 typed tools designed with strict JSON schema bounds and ex
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
+| `duplicate_elements` | `element_ids: list[str]`<br>`offset_x: float = 20.0`<br>`offset_y: float = 20.0` | `DuplicateResult`<br>`{ status, original_ids, duplicated_ids, id_mapping, revision }` | Duplicates multiple elements with spatial offsets, relationship remapping, arrow endpoint retargeting, bound label cloning, and group isolation. |
 | `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Moving a frame moves all contained elements; moving grouped elements moves group members together; rejects locked elements. |
 | `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows; rejects locked elements. |
 | `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment; rejects locked elements. |
@@ -233,11 +235,15 @@ The server exports 36 typed tools designed with strict JSON schema bounds and ex
 | `clear` | None | `DeleteResult`<br>`{ deleted: true, revision }` | Wipes the entire scene, active elements, and embedded state. |
 | `undo` | None | `UndoResult`<br>`{ restored_revision, available_history }` | Rolls back the scene to the state immediately preceding the latest mutation. |
 
-### 4. Inspection, Viewport, Query, Export & Storage
+### 4. Inspection, Viewport, Query, Export & Sharing
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
+| `describe_scene` | `detailed: bool = True` | `SceneDescriptionResult`<br>`{ summary, element_count, layout_type, elements, connections, bounds, revision }` | Produces an AI-readable summary of elements, positions, labels, flow connections, topological layout, and bounds. |
 | `get_scene_summary` | None | `SceneSummaryResult`<br>`{ element_count, type_counts, frames, groups, connectors, code_blocks, standalone_elements, bounds, description, revision }` | Provides a structured semantic overview and topological understanding of the entire diagram for AI agent reasoning. |
+| `get_resource` | `uri: str | None = None`<br>`resource_type: str | None = None`<br>`identifier: str | None = None` | `ResourceResult`<br>`{ resource_type, identifier, document, theme, library, element, ... }` | Retrieves scene, library (`architecture`, `flowchart`, `cloud`), theme (`default`, `dark`, `light`, `monokai`, `nord`, `solarized`), or element resources through a unified interface. |
+| `import_scene` | `data: str`<br>`mode: str = "replace"` (`replace`, `merge`)<br>`offset_x: float = 0.0`<br>`offset_y: float = 0.0` | `ImportResult`<br>`{ status, mode, elements_imported, total_elements, id_mapping, revision }` | Imports Excalidraw scenes from raw JSON, `.excalidraw` files, Obsidian `.excalidraw.md` files, or embedded PNGs with reference preservation and collision remapping. |
+| `export_to_excalidraw_url` | `name: str | None = None` | `ShareUrlResult`<br>`{ status, url, id, revision }` | Publishes active or saved scene to excalidraw.com using 128-bit AES-GCM client-side encryption and returns a shareable URL. |
 | `get_viewport` | None | `ViewportResult`<br>`{ scroll_x, scroll_y, zoom, view_background_color, revision }` | Inspects current canvas camera scroll coordinates, zoom factor, and background color. |
 | `set_viewport` | `scroll_x: float = None`<br>`scroll_y: float = None`<br>`zoom: float = None`<br>`background_color: str = None` | `ViewportResult`<br>`{ scroll_x, scroll_y, zoom, view_background_color, revision }` | Updates canvas camera viewport scroll offsets, zoom level, or background canvas color. |
 | `focus_elements` | `element_ids: list[str] = None`<br>`padding: int = 50` | `FocusResult`<br>`{ status, scroll_x, scroll_y, zoom, bounding_box, focused_element_ids, revision }` | Automatically calculates bounding box, centers camera, and sets fit zoom to frame specified elements or the entire diagram. |
@@ -250,7 +256,16 @@ The server exports 36 typed tools designed with strict JSON schema bounds and ex
 | `load` | `name: str` | `LoadResult`<br>`{ name, revision, element_count }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
 | `export_scene` | None | `EmbeddedResource`<br>(`application/vnd.excalidraw+json`) | Emits the entire `.excalidraw` schema v2 document directly into the MCP message. |
 | `preview` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
+| `get_canvas_screenshot` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders the current canvas into an inline PNG screenshot containing embedded `application/vnd.excalidraw+json` metadata. |
 | `export_png` | `name: str`<br>`directory: str | None = None`<br>`scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True`<br>`overwrite: bool = False` | `PngExportResult`<br>`{ status, name, path, bytes, width, height, scale, revision }` | Atomically exports the active scene directly to a PNG image file in a project folder or configured directory. |
+
+### 5. Live Canvas Server & Browser Synchronization
+
+| Tool | Inputs | Outputs | Description |
+|---|---|---|---|
+| `start_live_server` | `host: str = "127.0.0.1"`<br>`port: int = 8080` | `LiveServerResult`<br>`{ status, url, host, port }` | Launches the interactive browser-connected live canvas server with real-time WebSocket synchronization. |
+| `stop_live_server` | None | `LiveServerResult`<br>`{ status }` | Gracefully shuts down the background live canvas server and closes active client connections. |
+| `get_live_server_status` | None | `LiveServerResult`<br>`{ is_running, url, host, port, active_clients }` | Reports operational status, connection URL, and connected client count of the live canvas server. |
 
 ---
 
@@ -306,7 +321,7 @@ pip install -e .
 
 ### 2. Run the Test Suite
 
-The test suite contains 160 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, PNG export, fonts, code blocks, and MCP schemas:
+The test suite contains 205 unit and contract tests verifying Excalidraw serialization, layout mathematics, boundary snapping, storage safety, PNG export, fonts, code blocks, live server synchronization, sharing, and MCP schemas:
 
 ```bash
 uv run python -B -m unittest discover -s tests -v
