@@ -9,10 +9,11 @@ in MCP clients and direct file exports. Features:
 """
 
 import io
+import json
 import math
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
 from excalidraw_mcp.code_blocks import get_theme, highlight_code
 from excalidraw_mcp.fonts import get_font
@@ -221,7 +222,12 @@ def render_scene_image(
             anchor="mm",
         )
         buf = io.BytesIO()
-        image.save(buf, format="PNG")
+        info = PngImagePlugin.PngInfo()
+        try:
+            info.add_text("application/vnd.excalidraw+json", json.dumps(document, ensure_ascii=False))
+        except Exception:
+            pass
+        image.save(buf, format="PNG", pnginfo=info)
         return buf.getvalue(), img_w, img_h
 
     # Identify bound text elements of code blocks so they are not rendered twice
@@ -407,7 +413,12 @@ def render_scene_image(
 
     # Save to buffer and return bytes and dimensions
     output = io.BytesIO()
-    image.save(output, format="PNG")
+    info = PngImagePlugin.PngInfo()
+    try:
+        info.add_text("application/vnd.excalidraw+json", json.dumps(document, ensure_ascii=False))
+    except Exception:
+        pass
+    image.save(output, format="PNG", pnginfo=info)
     return output.getvalue(), img_w, img_h
 
 

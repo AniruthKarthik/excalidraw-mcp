@@ -135,6 +135,7 @@ def _move_arrow_endpoints(el, dx, dy, start, end):
 class SceneService:
     def __init__(self, state: SceneState | None = None):
         self.state = state if state is not None else SceneState()
+        self._live_server = None
 
     def add_shape(self, shape, x, y, w, h, label="", frame_id=None, **style):
         if shape not in SHAPES:
@@ -2469,3 +2470,287 @@ class SceneService:
             "description": " ".join(desc_parts),
             "revision": revision,
         }
+
+    def duplicate_elements(self, element_ids, offset_x=20.0, offset_y=20.0):
+        if not isinstance(element_ids, list) or not element_ids:
+            raise SceneError("element_ids must be a non-empty list of element IDs")
+        if not _finite_number(offset_x) or not _finite_number(offset_y):
+            raise SceneError("offset_x and offset_y must be finite numbers")
+
+        def apply_duplicate(document):
+            import random
+            import uuid
+            from copy import deepcopy
+
+            index = _active(document)
+            for eid in element_ids:
+                if not isinstance(eid, str) or not eid.strip():
+                    raise SceneError("Element ID must be a non-empty string")
+                _require(index, eid)
+
+            targets_set = list(element_ids)
+            for eid in element_ids:
+                lbl = _label_for(index, eid)
+                if lbl and lbl["id"] not in targets_set:
+                    targets_set.append(lbl["id"])
+
+            id_map = {
+                old_id: f"{index[old_id]['type']}_{uuid.uuid4().hex[:10]}"
+                for old_id in targets_set
+            }
+
+            group_map = {}
+            for old_id in targets_set:
+                for gid in index[old_id].get("groupIds", []):
+                    if gid not in group_map:
+                        group_map[gid] = f"grp_{uuid.uuid4().hex[:12]}"
+
+            duplicated_elements = []
+            for old_id in targets_set:
+                orig = index[old_id]
+                cloned = deepcopy(orig)
+                cloned["id"] = id_map[old_id]
+                cloned["x"] += offset_x
+                cloned["y"] += offset_y
+                cloned["seed"] = random.randrange(1, 2**31)
+                cloned["versionNonce"] = random.randrange(1, 2**31)
+                cloned["version"] = 1
+                cloned["locked"] = False
+
+                if cloned.get("containerId") and cloned["containerId"] in id_map:
+                    cloned["containerId"] = id_map[cloned["containerId"]]
+                elif cloned.get("containerId"):
+                    cloned["containerId"] = None
+
+                if cloned.get("frameId") and cloned["frameId"] in id_map:
+                    cloned["frameId"] = id_map[cloned["frameId"]]
+                elif cloned.get("frameId"):
+                    if cloned["frameId"] not in index:
+                        cloned["frameId"] = None
+
+                if cloned.get("boundElements"):
+                    cloned["boundElements"] = [
+                        {**b, "id": id_map[b["id"]]}
+                        for b in cloned["boundElements"]
+                        if b["id"] in id_map
+                    ]
+
+                if cloned.get("groupIds"):
+                    cloned["groupIds"] = [
+                        group_map[gid]
+                        for gid in cloned["groupIds"]
+                        if gid in group_map
+                    ]
+
+                if cloned.get("type") == "arrow":
+                    for end in ("startBinding", "endBinding"):
+                        binding = cloned.get(end)
+                        if binding:
+                            src_id = binding.get("elementId")
+                            if src_id in id_map:
+                                binding["elementId"] = id_map[src_id]
+                            else:
+                                cloned[end] = None
+
+                duplicated_elements.append(cloned)
+
+            document["elements"].extend(duplicated_elements)
+            return {
+                "status": "duplicated",
+                "original_ids": element_ids,
+                "duplicated_ids": [id_map[eid] for eid in element_ids],
+                "id_mapping": id_map,
+            }
+
+        res = self.state.apply(apply_duplicate)
+        return {**res, "revision": self.state.revision}
+
+    def describe_scene(self, detailed=True):
+        doc, revision = self.state.snapshot()
+        index = _active(doc)
+        elements = [el for el in doc.get("elements", []) if not el.get("isDeleted")]
+
+        lines = [f"=== Scene Description (Revision {revision}) ==="]
+        lines.append(f"Total Elements: {len(elements)}")
+
+        bounds = None
+        if elements:
+            min_x = min(el["x"] for el in elements)
+            min_y = min(el["y"] for el in elements)
+            max_x = max(el["x"] + el.get("width", 0) for el in elements)
+            max_y = max(el["y"] + el.get("height", 0) for el in elements)
+            bounds = {
+                "min_x": min_x,
+                "min_y": min_y,
+                "max_x": max_x,
+                "max_y": max_y,
+                "width": max_x - min_x,
+                "height": max_y - min_y,
+            }
+            lines.append(
+                f"Canvas Bounds: ({min_x:.0f}, {min_y:.0f}) to ({max_x:.0f}, {max_y:.0f}) [Size: {bounds['width']:.0f}x{bounds['height']:.0f}]"
+            )
+
+        element_summaries = []
+        for el in elements:
+            lbl = _label_for(index, el["id"])
+            lbl_text = (
+                lbl.get("text")
+                if lbl
+                else (
+                    el.get("name")
+                    if el["type"] == "frame"
+                    else (el.get("text") if el["type"] == "text" else None)
+                )
+            )
+            info = {
+                "id": el["id"],
+                "type": el["type"],
+                "position": {"x": el["x"], "y": el["y"]},
+                "dimensions": {
+                    "width": el.get("width", 0),
+                    "height": el.get("height", 0),
+                },
+                "label": lbl_text,
+                "stroke_color": el.get("strokeColor"),
+                "background_color": el.get("backgroundColor"),
+                "frame_id": el.get("frameId"),
+                "group_ids": el.get("groupIds", []),
+                "locked": el.get("locked", False),
+            }
+            element_summaries.append(info)
+
+        connections = []
+        for el in elements:
+            if el["type"] == "arrow":
+                src = (el.get("startBinding") or {}).get("elementId")
+                tgt = (el.get("endBinding") or {}).get("elementId")
+                src_lbl = (
+                    _label_for(index, src).get("text")
+                    if src and _label_for(index, src)
+                    else (index.get(src, {}).get("text") if src in index else src)
+                )
+                tgt_lbl = (
+                    _label_for(index, tgt).get("text")
+                    if tgt and _label_for(index, tgt)
+                    else (index.get(tgt, {}).get("text") if tgt in index else tgt)
+                )
+                lbl = _label_for(index, el["id"])
+                edge_info = {
+                    "arrow_id": el["id"],
+                    "source_id": src,
+                    "target_id": tgt,
+                    "source_label": src_lbl,
+                    "target_label": tgt_lbl,
+                    "label": lbl.get("text") if lbl else None,
+                    "elbowed": el.get("elbowed", False),
+                }
+                connections.append(edge_info)
+
+        if len(connections) > 1:
+            layout_type = "connected_graph"
+        elif any(el["type"] == "frame" for el in elements):
+            layout_type = "clustered_frames"
+        else:
+            layout_type = "freeform"
+
+        lines.append(f"Layout Pattern: {layout_type}")
+
+        if connections:
+            lines.append("\nFlow Connections:")
+            for c in connections:
+                src_desc = (
+                    f"'{c['source_label']}' ({c['source_id']})"
+                    if c["source_label"]
+                    else (c["source_id"] or "unbound")
+                )
+                tgt_desc = (
+                    f"'{c['target_label']}' ({c['target_id']})"
+                    if c["target_label"]
+                    else (c["target_id"] or "unbound")
+                )
+                lbl_desc = f" via '{c['label']}'" if c["label"] else ""
+                elbow_desc = " [elbowed]" if c["elbowed"] else ""
+                lines.append(f"  - {src_desc} --> {tgt_desc}{lbl_desc}{elbow_desc}")
+
+        if detailed:
+            lines.append("\nElements Detail:")
+            for es in element_summaries:
+                lbl_part = f" label='{es['label']}'" if es["label"] else ""
+                frame_part = f" inside frame='{es['frame_id']}'" if es["frame_id"] else ""
+                lock_part = " [LOCKED]" if es["locked"] else ""
+                lines.append(
+                    f"  - [{es['type']}] id='{es['id']}' at ({es['position']['x']:.0f}, {es['position']['y']:.0f}) size={es['dimensions']['width']:.0f}x{es['dimensions']['height']:.0f}{lbl_part}{frame_part}{lock_part}"
+                )
+
+        return {
+            "summary": "\n".join(lines),
+            "element_count": len(elements),
+            "layout_type": layout_type,
+            "elements": element_summaries,
+            "connections": connections,
+            "bounds": bounds,
+            "revision": revision,
+        }
+
+    def export_to_excalidraw_url(self, name=None, timeout=12.0):
+        if name:
+            doc = load_scene(name)
+        else:
+            doc = self.state.document()
+        from .sharing import export_to_excalidraw_url
+
+        res = export_to_excalidraw_url(doc, timeout=timeout)
+        return {**res, "revision": self.state.revision}
+
+    def import_scene(self, data, mode="replace", offset_x=0.0, offset_y=0.0):
+        from .importer import import_scene
+
+        return import_scene(
+            service=self,
+            data=data,
+            mode=mode,
+            offset_x=offset_x,
+            offset_y=offset_y,
+        )
+
+    def get_resource(self, uri=None, resource_type=None, identifier=None):
+        from .resources import get_resource
+
+        return get_resource(
+            service=self,
+            uri=uri,
+            resource_type=resource_type,
+            identifier=identifier,
+        )
+
+    def read_diagram_guide(self, topic=None):
+        from .design_guide import get_diagram_guide
+
+        return get_diagram_guide(topic=topic)
+
+    def start_live_server(self, host="127.0.0.1", port=8080):
+        from .live_server import LiveCanvasServer
+
+        if self._live_server is None:
+            self._live_server = LiveCanvasServer(service=self, host=host, port=port)
+        return self._live_server.start(host=host, port=port)
+
+    def stop_live_server(self):
+        if self._live_server is not None:
+            res = self._live_server.stop()
+            self._live_server = None
+            return res
+        return {"status": "not_running"}
+
+    def get_live_server_status(self):
+        if self._live_server is not None:
+            return self._live_server.get_status()
+        return {
+            "is_running": False,
+            "url": None,
+            "host": "127.0.0.1",
+            "port": 8080,
+            "active_clients": 0,
+        }
+

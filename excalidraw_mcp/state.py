@@ -33,6 +33,29 @@ class SceneState:
         self._history = []
         self._history_sizes = []
         self._history_bytes = 0
+        self._listeners = []
+
+    def subscribe(self, callback: Callable[[SceneDocument, int], None]) -> Callable[[], None]:
+        with self._lock:
+            self._listeners.append(callback)
+
+        def unsubscribe():
+            with self._lock:
+                if callback in self._listeners:
+                    self._listeners.remove(callback)
+
+        return unsubscribe
+
+    def _notify(self):
+        with self._lock:
+            doc = deepcopy(self._document)
+            rev = self._revision
+            listeners = list(self._listeners)
+        for listener in listeners:
+            try:
+                listener(doc, rev)
+            except Exception:
+                pass
 
     @property
     def revision(self):
@@ -116,6 +139,7 @@ class SceneState:
         self._document = replacement
         self._index = {el["id"]: el for el in replacement["elements"]}
         self._revision += 1
+        self._notify()
         return True
 
     def replace(self, document, expected_revision=None):
@@ -133,6 +157,7 @@ class SceneState:
             self._document = replacement
             self._index = {el["id"]: el for el in replacement["elements"]}
             self._revision += 1
+            self._notify()
 
     def apply(self, operation: Callable[[SceneDocument], T]) -> T:
         """Apply a callback to a private draft. Exceptions roll back all edits."""
@@ -179,6 +204,7 @@ class SceneState:
             self._document = replacement
             self._index = {el["id"]: el for el in self._document["elements"]}
             self._revision += 1
+            self._notify()
             return {
                 "status": "undone",
                 "revision": self._revision,

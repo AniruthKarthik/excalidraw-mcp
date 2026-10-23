@@ -195,6 +195,16 @@ class StateTests(unittest.TestCase):
                 "set_viewport",
                 "focus_elements",
                 "get_scene_summary",
+                "export_to_excalidraw_url",
+                "describe_scene",
+                "get_canvas_screenshot",
+                "get_resource",
+                "read_diagram_guide",
+                "duplicate_elements",
+                "import_scene",
+                "start_live_server",
+                "stop_live_server",
+                "get_live_server_status",
             },
         )
         result = first["add_rectangle"](0, 0, 10, 10, label="A")

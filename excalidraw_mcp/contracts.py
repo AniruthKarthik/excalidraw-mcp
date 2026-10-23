@@ -347,3 +347,72 @@ class SceneSummaryResult(TypedDict):
     description: str
     revision: int
 
+
+class ShareUrlResult(TypedDict):
+    status: str
+    url: str
+    id: str
+    revision: int
+
+
+class SceneDescriptionResult(TypedDict):
+    summary: str
+    element_count: int
+    layout_type: str
+    elements: list[dict[str, Any]]
+    connections: list[dict[str, Any]]
+    bounds: dict[str, float] | None
+    revision: int
+
+
+class DiagramGuideResult(TypedDict):
+    topic: str
+    guide: Any
+    available_topics: list[str]
+
+
+class DuplicateResult(TypedDict):
+    status: str
+    original_ids: list[str]
+    duplicated_ids: list[str]
+    id_mapping: dict[str, str]
+    revision: int
+
+
+class ImportResult(TypedDict):
+    status: str
+    mode: str
+    elements_imported: int
+    total_elements: NotRequired[int]
+    id_mapping: NotRequired[dict[str, str]]
+    revision: int
+
+
+class ResourceResult(TypedDict):
+    resource_type: str
+    identifier: str
+    name: NotRequired[str]
+    element_count: NotRequired[int]
+    document: NotRequired[dict[str, Any]]
+    theme: NotRequired[dict[str, Any]]
+    library: NotRequired[dict[str, Any]]
+    element: NotRequired[dict[str, Any]]
+    label: NotRequired[dict[str, Any] | None]
+    frame: NotRequired[dict[str, Any] | None]
+    connected_arrows: NotRequired[list[dict[str, Any]]]
+    group_peers: NotRequired[list[str]]
+    available_themes: NotRequired[list[str]]
+    available_libraries: NotRequired[list[str]]
+    source: NotRequired[str]
+    revision: NotRequired[int]
+
+
+class LiveServerResult(TypedDict):
+    status: str
+    url: NotRequired[str | None]
+    host: NotRequired[str]
+    port: NotRequired[int]
+    is_running: NotRequired[bool]
+    active_clients: NotRequired[int]
+
+

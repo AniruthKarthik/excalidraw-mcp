@@ -1,6 +1,7 @@
 """MCP adapters; each server owns an explicit scene service."""
 
 from hashlib import sha256
+from typing import Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -20,8 +21,10 @@ from excalidraw_mcp.contracts import (
     Coordinate,
     CreateResult,
     DeleteResult,
+    DiagramGuideResult,
     Dimension,
     Direction,
+    DuplicateResult,
     ElementId,
     ElementResult,
     ElementSummary,
@@ -37,8 +40,10 @@ from excalidraw_mcp.contracts import (
     GraphNode,
     GraphResult,
     GroupResult,
+    ImportResult,
     Label,
     LayoutType,
+    LiveServerResult,
     LoadResult,
     LockResult,
     MoveResult,
@@ -50,13 +55,16 @@ from excalidraw_mcp.contracts import (
     PreviewPadding,
     PreviewScale,
     ResizeResult,
+    ResourceResult,
     Roughness,
     Roundness,
     SaveResult,
     SavedScenesResult,
+    SceneDescriptionResult,
     SceneName,
     ScenePage,
     SceneSummaryResult,
+    ShareUrlResult,
     StatusResult,
     StrokeStyle,
     StrokeWidth,
@@ -703,6 +711,107 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def get_scene_summary() -> SceneSummaryResult:
         """Get a structured semantic overview and topological summary of the diagram for LLM understanding."""
         return invoke(service.get_scene_summary)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructiveHint=False, openWorldHint=True),
+        run_in_thread=False,
+    )
+    def export_to_excalidraw_url(name: SceneName | None = None) -> ShareUrlResult:
+        """Publish the scene to excalidraw.com with client-side encryption and return a shareable URL."""
+        return invoke(service.export_to_excalidraw_url, name=name)
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def describe_scene(detailed: Boolean = True) -> SceneDescriptionResult:
+        """Produce an AI-readable summary of elements, positions, labels, connections, and layout."""
+        return invoke(service.describe_scene, detailed=detailed)
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def get_canvas_screenshot(
+        scale: PreviewScale = 1.0,
+        padding: PreviewPadding = 40,
+        background: Boolean = True,
+    ) -> Image:
+        """Render the current live canvas to an inline PNG screenshot with embedded Excalidraw metadata."""
+        png_bytes = invoke(
+            service.preview,
+            scale=scale,
+            padding=padding,
+            background=background,
+        )
+        return Image(data=png_bytes, format="png")
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def get_resource(
+        uri: str | None = None,
+        resource_type: str | None = None,
+        identifier: str | None = None,
+    ) -> ResourceResult:
+        """Retrieve scene, library, theme, or element resources through a unified interface."""
+        return invoke(
+            service.get_resource,
+            uri=uri,
+            resource_type=resource_type,
+            identifier=identifier,
+        )
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def read_diagram_guide(topic: str | None = None) -> DiagramGuideResult:
+        """Read practical guidelines for layout, spacing, colors, typography, grouping, arrows, and readability."""
+        return invoke(service.read_diagram_guide, topic=topic)
+
+    @mcp.tool(annotations=MUTATING, run_in_thread=False)
+    def duplicate_elements(
+        element_ids: list[ElementId],
+        offset_x: Coordinate = 20.0,
+        offset_y: Coordinate = 20.0,
+    ) -> DuplicateResult:
+        """Duplicate multiple elements with spatial offsets, relationship remapping, and internal binding preservation."""
+        return invoke(
+            service.duplicate_elements,
+            element_ids=element_ids,
+            offset_x=offset_x,
+            offset_y=offset_y,
+        )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(destructiveHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def import_scene(
+        data: str,
+        mode: Literal["replace", "merge"] = "replace",
+        offset_x: Coordinate = 0.0,
+        offset_y: Coordinate = 0.0,
+    ) -> ImportResult:
+        """Import scene from raw JSON, .excalidraw file, Obsidian .excalidraw.md, or embedded PNG with collision prevention."""
+        return invoke(
+            service.import_scene,
+            data=data,
+            mode=mode,
+            offset_x=offset_x,
+            offset_y=offset_y,
+        )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=True),
+        run_in_thread=False,
+    )
+    def start_live_server(host: str = "127.0.0.1", port: int = 8080) -> LiveServerResult:
+        """Start the background browser-connected Excalidraw live canvas server with real-time synchronization."""
+        return invoke(service.start_live_server, host=host, port=port)
+
+    @mcp.tool(
+        annotations=ToolAnnotations(idempotentHint=True, openWorldHint=False),
+        run_in_thread=False,
+    )
+    def stop_live_server() -> LiveServerResult:
+        """Stop the background live canvas server."""
+        return invoke(service.stop_live_server)
+
+    @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
+    def get_live_server_status() -> LiveServerResult:
+        """Check status of the browser-connected live canvas server."""
+        return invoke(service.get_live_server_status)
 
     return mcp
 
