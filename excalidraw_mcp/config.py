@@ -33,6 +33,15 @@ def default_scene_directory():
     """Return a writable per-user data location without touching the filesystem."""
     if sys.platform == "darwin":
         data_home = Path.home() / "Library" / "Application Support"
+    elif sys.platform.startswith("win"):
+        configured = os.environ.get("APPDATA")
+        data_home = (
+            Path(configured).expanduser()
+            if configured
+            else Path.home() / "AppData" / "Roaming"
+        )
+        if not data_home.is_absolute():
+            raise ValueError("APPDATA must be an absolute path")
     else:
         configured = os.environ.get("XDG_DATA_HOME")
         data_home = (

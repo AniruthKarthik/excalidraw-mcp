@@ -236,6 +236,7 @@ class LiveCanvasServer:
         self.server: uvicorn.Server | None = None
         self.thread: threading.Thread | None = None
         self.active_websockets: set[WebSocket] = set()
+        self._ws_lock = threading.Lock()
         self._unsubscribe_state: Any = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self.is_running = False
@@ -284,18 +285,21 @@ class LiveCanvasServer:
     async def _handle_health(self, request):
         doc, rev = self.service.state.snapshot()
         active_els = [el for el in doc.get("elements", []) if not el.get("isDeleted")]
+        with self._ws_lock:
+            client_count = len(self.active_websockets)
         return JSONResponse(
             {
                 "status": "healthy",
                 "revision": rev,
                 "element_count": len(active_els),
-                "active_ws_clients": len(self.active_websockets),
+                "active_ws_clients": client_count,
             }
         )
 
     async def _handle_ws(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_websockets.add(websocket)
+        with self._ws_lock:
+            self.active_websockets.add(websocket)
         try:
             # Send initial scene snapshot
             doc, rev = self.service.state.snapshot()
@@ -315,11 +319,17 @@ class LiveCanvasServer:
         except WebSocketDisconnect:
             pass
         finally:
-            self.active_websockets.discard(websocket)
+            with self._ws_lock:
+                self.active_websockets.discard(websocket)
 
     def _on_state_change(self, document: dict[str, Any], revision: int):
         """Called by SceneState subscriber whenever state changes."""
-        if not self.is_running or not self.active_websockets or not self._loop:
+        if not self.is_running or not self._loop:
+            return
+
+        with self._ws_lock:
+            ws_targets = list(self.active_websockets)
+        if not ws_targets:
             return
 
         payload = json.dumps(
@@ -327,11 +337,12 @@ class LiveCanvasServer:
         )
 
         async def broadcast():
-            for ws in list(self.active_websockets):
+            for ws in ws_targets:
                 try:
                     await ws.send_text(payload)
                 except Exception:
-                    self.active_websockets.discard(ws)
+                    with self._ws_lock:
+                        self.active_websockets.discard(ws)
 
         try:
             asyncio.run_coroutine_threadsafe(broadcast(), self._loop)
@@ -364,16 +375,23 @@ class LiveCanvasServer:
 
         # Event loop capture
         started_event = threading.Event()
+        server_error = None
 
         def run_server():
+            nonlocal server_error
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             self._loop = loop
             started_event.set()
             try:
                 loop.run_until_complete(self.server.serve())
+            except BaseException as exc:
+                server_error = exc
             finally:
-                loop.close()
+                try:
+                    loop.close()
+                except Exception:
+                    pass
 
         self.thread = threading.Thread(target=run_server, daemon=True, name="ExcalidrawLiveCanvas")
         self.thread.start()
@@ -381,6 +399,18 @@ class LiveCanvasServer:
 
         # Wait briefly for socket binding
         time.sleep(0.3)
+        if not self.thread.is_alive():
+            self.thread = None
+            self.server = None
+            self._loop = None
+            err_msg = str(server_error) if server_error else f"Could not bind to port {self.port}"
+            return {
+                "status": "failed",
+                "error": err_msg,
+                "host": self.host,
+                "port": self.port,
+            }
+
         self.is_running = True
 
         # Subscribe to scene mutations
@@ -412,16 +442,19 @@ class LiveCanvasServer:
         self.is_running = False
         self.server = None
         self._loop = None
-        self.active_websockets.clear()
+        with self._ws_lock:
+            self.active_websockets.clear()
 
         return {"status": "stopped"}
 
     def get_status(self) -> dict[str, Any]:
         """Get live canvas server status."""
+        with self._ws_lock:
+            client_count = len(self.active_websockets)
         return {
             "is_running": self.is_running,
             "url": f"http://{self.host}:{self.port}" if self.is_running else None,
             "host": self.host,
             "port": self.port,
-            "active_clients": len(self.active_websockets),
+            "active_clients": client_count,
         }

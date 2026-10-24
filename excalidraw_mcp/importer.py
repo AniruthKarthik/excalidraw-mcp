@@ -5,12 +5,14 @@ import io
 import json
 import os
 import re
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Literal
 
 from PIL import Image
 
+from excalidraw_mcp.config import scene_directory
 from excalidraw_mcp.document import normalize_document
 from excalidraw_mcp.errors import SceneError
 from excalidraw_mcp.models import new_document, validate_document
@@ -96,31 +98,17 @@ def parse_scene_payload(data: str) -> dict[str, Any]:
 
     cleaned = data.strip()
 
-    # Check 1: Is it an existing file path?
-    candidate_path = Path(cleaned)
-    if candidate_path.is_file():
+    # Check 1: Is it raw JSON?
+    if cleaned.startswith("{") or cleaned.startswith("["):
         try:
-            raw_bytes = candidate_path.read_bytes()
-        except Exception as err:
-            raise SceneError(f"Failed to read file '{candidate_path}': {err}") from err
-
-        # Check if file is PNG
-        if raw_bytes.startswith(PNG_SIGNATURE) or candidate_path.suffix.lower() == ".png":
-            return _extract_from_png_bytes(raw_bytes)
-
-        # Decode as UTF-8 text
-        try:
-            text = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError as err:
-            raise SceneError(f"File '{candidate_path}' is not valid UTF-8 text or PNG: {err}") from err
-
-        if candidate_path.suffix.lower() in (".md", ".markdown") or "# Excalidraw Data" in text:
-            return _extract_from_obsidian_markdown(text)
-
-        try:
-            return json.loads(text)
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                # Array of elements passed
+                return new_document(parsed)
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError as err:
-            raise SceneError(f"File '{candidate_path}' contains invalid JSON: {err}") from err
+            raise SceneError(f"Invalid JSON payload: {err}") from err
 
     # Check 2: Is it base64-encoded PNG data?
     if cleaned.startswith("data:image/png;base64,") or cleaned.startswith("iVBORw0KGgo"):
@@ -134,21 +122,57 @@ def parse_scene_payload(data: str) -> dict[str, Any]:
         except Exception:
             pass
 
-    # Check 3: Is it Obsidian markdown text?
+    # Check 3: Is it inline Obsidian markdown text?
     if "# Excalidraw Data" in cleaned or "## Drawing" in cleaned:
         return _extract_from_obsidian_markdown(cleaned)
 
-    # Check 4: Is it raw JSON?
-    if cleaned.startswith("{") or cleaned.startswith("["):
+    # Check 4: Is it an existing file path within allowed directories?
+    if "\n" not in cleaned and len(cleaned) <= 4096:
+        candidate_path = Path(cleaned)
         try:
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, list):
-                # Array of elements passed
-                return new_document(parsed)
-            if isinstance(parsed, dict):
-                return parsed
-        except json.JSONDecodeError as err:
-            raise SceneError(f"Invalid JSON payload: {err}") from err
+            if candidate_path.is_file():
+                resolved = candidate_path.resolve()
+                allowed_roots = [
+                    Path(scene_directory()).resolve(),
+                    Path.cwd().resolve(),
+                    Path(tempfile.gettempdir()).resolve(),
+                ]
+                if not any(
+                    resolved == r or resolved.is_relative_to(r) for r in allowed_roots
+                ):
+                    raise SceneError(
+                        f"Access to file '{candidate_path}' is denied; path must be within the project, scene, or temporary directory"
+                    )
+
+                ALLOWED_EXTS = {".excalidraw", ".png", ".md", ".markdown", ".json"}
+                if resolved.suffix.lower() not in ALLOWED_EXTS:
+                    raise SceneError(
+                        f"Unsupported file format '{resolved.suffix}'. Supported extensions: {sorted(ALLOWED_EXTS)}"
+                    )
+
+                raw_bytes = candidate_path.read_bytes()
+
+                # Check if file is PNG
+                if raw_bytes.startswith(PNG_SIGNATURE) or resolved.suffix.lower() == ".png":
+                    return _extract_from_png_bytes(raw_bytes)
+
+                # Decode as UTF-8 text
+                try:
+                    text = raw_bytes.decode("utf-8")
+                except UnicodeDecodeError as err:
+                    raise SceneError(f"File '{candidate_path}' is not valid UTF-8 text or PNG: {err}") from err
+
+                if resolved.suffix.lower() in (".md", ".markdown") or "# Excalidraw Data" in text:
+                    return _extract_from_obsidian_markdown(text)
+
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as err:
+                    raise SceneError(f"File '{candidate_path}' contains invalid JSON: {err}") from err
+        except OSError as err:
+            if isinstance(err, SceneError):
+                raise
+            raise SceneError(f"Failed to access file '{candidate_path}': {err}") from err
 
     raise SceneError(
         "Unrecognized import format. Expected file path (.excalidraw, .png, .md), raw JSON, Obsidian markdown, or PNG data."

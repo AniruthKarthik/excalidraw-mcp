@@ -1,5 +1,6 @@
 """Scene operations independent of MCP transport and server globals."""
 
+import math
 import os
 import re
 import uuid
@@ -66,6 +67,8 @@ def _label_for(index, container_id):
 
 
 def _center_label(label, container):
+    if container.get("customData", {}).get("type") in ("code_block", "code-block"):
+        return
     if container["type"] == "arrow" and container.get("points"):
         first, last = container["points"][0], container["points"][-1]
         cx = container["x"] + (first[0] + last[0]) / 2
@@ -74,6 +77,17 @@ def _center_label(label, container):
         cx = container["x"] + container.get("width", 0) / 2
         cy = container["y"] + container.get("height", 0) / 2
     label["x"], label["y"] = cx - label["width"] / 2, cy - label["height"] / 2
+
+
+def _element_bounds(el):
+    """Accurately compute the bounding box of any element, accounting for arrow points."""
+    x, y = float(el.get("x", 0)), float(el.get("y", 0))
+    w, h = float(el.get("width", 0)), float(el.get("height", 0))
+    if el.get("type") == "arrow" and el.get("points"):
+        pts_x = [x + float(p[0]) for p in el["points"]]
+        pts_y = [y + float(p[1]) for p in el["points"]]
+        return min(pts_x), min(pts_y), max(pts_x), max(pts_y)
+    return x, y, x + w, y + h
 
 
 def _as_layout_node(el):
@@ -336,7 +350,7 @@ class SceneService:
                 raise SceneError(f"Cannot resize locked element '{element_id}'")
             if el["type"] not in (*SHAPES, "frame"):
                 raise SceneError(
-                    "Only rectangle, ellipse and diamond elements can be resized"
+                    "Only rectangle, ellipse, diamond and frame elements can be resized"
                 )
             el["width"], el["height"] = width, height
             label = _label_for(index, element_id)
@@ -661,7 +675,8 @@ class SceneService:
         ):
             raise SceneError("padding must be an integer between 0 and 200")
 
-        from .config import export_directory
+        import tempfile
+        from .config import export_directory, scene_directory
         from .renderer import render_scene_image
 
         if directory is not None:
@@ -670,6 +685,21 @@ class SceneService:
             target_dir = Path(directory).expanduser()
             if not target_dir.is_absolute():
                 target_dir = (Path.cwd() / target_dir).resolve()
+            else:
+                target_dir = target_dir.resolve()
+            allowed_export_roots = [
+                export_directory().resolve(),
+                Path(scene_directory()).resolve(),
+                Path.cwd().resolve(),
+                Path(tempfile.gettempdir()).resolve(),
+            ]
+            if not any(
+                target_dir == r or target_dir.is_relative_to(r)
+                for r in allowed_export_roots
+            ):
+                raise SceneError(
+                    f"Export directory '{directory}' is outside permitted project, export, and temporary locations"
+                )
         else:
             target_dir = export_directory().resolve()
 
@@ -1515,11 +1545,14 @@ class SceneService:
                     }
                     if op.get("roundness") is not None:
                         r = op["roundness"]
-                        updates["roundness"] = (
-                            {"type": 3}
-                            if r == "adaptive"
-                            else ({"type": 2} if r == "round" else None)
-                        )
+                        if r == "adaptive":
+                            updates["roundness"] = {"type": 3}
+                        elif r == "round":
+                            updates["roundness"] = {"type": 2}
+                        elif r == "sharp":
+                            updates["roundness"] = None
+                        elif isinstance(r, dict):
+                            updates["roundness"] = r
                     if op.get("elbowed") is not None:
                         updates["elbowed"] = bool(op["elbowed"])
                     target_frame_id = resolve(op.get("frame_id"))
@@ -1953,6 +1986,13 @@ class SceneService:
                 "label_id": group[1]["id"] if len(group) > 1 else None,
             }
         edge_map = {}
+        pair_counts: dict[tuple[str, str], int] = {}
+        for edge in normalized_edges:
+            pair = (edge["source"], edge["target"])
+            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+
+        pair_seen: dict[tuple[str, str], int] = {}
+
         for edge in normalized_edges:
             source, target = (
                 positioned_map[edge["source"]],
@@ -1961,6 +2001,22 @@ class SceneService:
             start, end = boundary_point(source, target, 1), boundary_point(
                 target, source, -1
             )
+            pair = (edge["source"], edge["target"])
+            total_for_pair = pair_counts[pair]
+            idx_for_pair = pair_seen.get(pair, 0)
+            pair_seen[pair] = idx_for_pair + 1
+
+            if total_for_pair > 1:
+                dx = end[0] - start[0]
+                dy = end[1] - start[1]
+                dist = math.hypot(dx, dy)
+                if dist > 1e-4:
+                    nx = -dy / dist
+                    ny = dx / dist
+                    offset_mag = (idx_for_pair - (total_for_pair - 1) / 2.0) * 24.0
+                    start = (start[0] + nx * offset_mag, start[1] + ny * offset_mag)
+                    end = (end[0] + nx * offset_mag, end[1] + ny * offset_mag)
+
             edge_elbowed = edge.get("elbowed", elbowed)
             connector = arrow(*start, *end, elbowed=edge_elbowed, **style)
             connector["startBinding"] = {
@@ -2291,10 +2347,10 @@ class SceneService:
                     "focused_element_ids": [],
                 }
 
-            min_x = min(el["x"] for el in targets)
-            min_y = min(el["y"] for el in targets)
-            max_x = max(el["x"] + el.get("width", 0) for el in targets)
-            max_y = max(el["y"] + el.get("height", 0) for el in targets)
+            min_x = min(_element_bounds(el)[0] for el in targets)
+            min_y = min(_element_bounds(el)[1] for el in targets)
+            max_x = max(_element_bounds(el)[2] for el in targets)
+            max_y = max(_element_bounds(el)[3] for el in targets)
             bb_w = max(1.0, max_x - min_x)
             bb_h = max(1.0, max_y - min_y)
 
@@ -2385,13 +2441,14 @@ class SceneService:
                 )
 
             custom_data = el.get("customData") or {}
-            if custom_data.get("type") == "code-block":
+            if custom_data.get("type") in ("code_block", "code-block"):
+                code_text = custom_data.get("code", "")
                 code_blocks.append(
                     {
                         "container_id": el["id"],
                         "language": custom_data.get("language", "text"),
                         "title": custom_data.get("title"),
-                        "lines_count": custom_data.get("lines_count", 0),
+                        "lines_count": len(code_text.splitlines()) if code_text else custom_data.get("lines_count", 0),
                     }
                 )
 
@@ -2414,9 +2471,10 @@ class SceneService:
 
         bounds = None
         if elements:
-            min_x = min(el["x"] for el in elements)
-            min_y = min(el["y"] for el in elements)
-            max_x = max(el["x"] + el.get("width", 0) for el in elements)
+            min_x = min(_element_bounds(el)[0] for el in elements)
+            min_y = min(_element_bounds(el)[1] for el in elements)
+            max_x = max(_element_bounds(el)[2] for el in elements)
+            max_y = max(_element_bounds(el)[3] for el in elements)
             max_y = max(el["y"] + el.get("height", 0) for el in elements)
             bounds = {
                 "min_x": min_x,
@@ -2575,10 +2633,10 @@ class SceneService:
 
         bounds = None
         if elements:
-            min_x = min(el["x"] for el in elements)
-            min_y = min(el["y"] for el in elements)
-            max_x = max(el["x"] + el.get("width", 0) for el in elements)
-            max_y = max(el["y"] + el.get("height", 0) for el in elements)
+            min_x = min(_element_bounds(el)[0] for el in elements)
+            min_y = min(_element_bounds(el)[1] for el in elements)
+            max_x = max(_element_bounds(el)[2] for el in elements)
+            max_y = max(_element_bounds(el)[3] for el in elements)
             bounds = {
                 "min_x": min_x,
                 "min_y": min_y,

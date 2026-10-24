@@ -459,7 +459,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         return invoke(service.undo)
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
-    def export_scene():
+    def export_scene() -> EmbeddedResource:
         """Return an embedded .excalidraw document for the client to save/import. No file is written."""
         payload = invoke(service.export_scene)
         snapshot_id = sha256(payload.encode("utf-8")).hexdigest()

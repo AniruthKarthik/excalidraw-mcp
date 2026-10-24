@@ -141,8 +141,13 @@ def arrow(x, y, x2, y2, elbowed=False, **style):
 def bind_text(text_el: dict, container_el: dict):
     """Bind a text element as the label of a container shape."""
     text_el["containerId"] = container_el["id"]
-    text_el["textAlign"] = "center"
-    text_el["verticalAlign"] = "middle"
+    is_code_block = container_el.get("customData", {}).get("type") in ("code_block", "code-block")
+    if not is_code_block:
+        text_el["textAlign"] = "center"
+        text_el["verticalAlign"] = "middle"
+    else:
+        text_el.setdefault("textAlign", "left")
+        text_el.setdefault("verticalAlign", "top")
     text_el["angle"] = container_el.get("angle", 0)
 
     text_id = text_el["id"]

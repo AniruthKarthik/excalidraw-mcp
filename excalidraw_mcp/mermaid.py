@@ -226,33 +226,39 @@ def parse_mermaid(
             if tail_part:
                 tokens.append(tail_part)
 
-            # Register each node token
-            parsed_nodes = []
+            # Register each stage (which can have multiple nodes separated by &)
+            stage_nodes = []
             for tok in tokens:
-                nid, nlabel, nshape = _parse_node_token(tok)
-                if nid not in nodes_dict:
-                    nodes_dict[nid] = {
-                        "id": nid,
-                        "label": nlabel,
-                        "shape": nshape,
-                        "cluster": current_cluster,
-                    }
-                else:
-                    if nlabel != nid:
-                        nodes_dict[nid]["label"] = nlabel
-                    if nshape != "rectangle":
-                        nodes_dict[nid]["shape"] = nshape
-                    if current_cluster and not nodes_dict[nid].get("cluster"):
-                        nodes_dict[nid]["cluster"] = current_cluster
-                parsed_nodes.append(nid)
+                sub_toks = [p.strip() for p in re.split(r"\s+&\s+", tok) if p.strip()]
+                parsed_stage = []
+                for sub_tok in sub_toks:
+                    nid, nlabel, nshape = _parse_node_token(sub_tok)
+                    if nid not in nodes_dict:
+                        nodes_dict[nid] = {
+                            "id": nid,
+                            "label": nlabel,
+                            "shape": nshape,
+                            "cluster": current_cluster,
+                        }
+                    else:
+                        if nlabel != nid:
+                            nodes_dict[nid]["label"] = nlabel
+                        if nshape != "rectangle":
+                            nodes_dict[nid]["shape"] = nshape
+                        if current_cluster and not nodes_dict[nid].get("cluster"):
+                            nodes_dict[nid]["cluster"] = current_cluster
+                    parsed_stage.append(nid)
+                stage_nodes.append(parsed_stage)
 
-            # Link consecutive nodes with edges
-            for i in range(len(parsed_nodes) - 1):
-                src = parsed_nodes[i]
-                tgt = parsed_nodes[i + 1]
+            # Link consecutive stages with edges
+            for i in range(len(stage_nodes) - 1):
+                sources = stage_nodes[i]
+                targets = stage_nodes[i + 1]
                 edge_lbl = labels[i] if i < len(labels) else ""
-                if src != tgt:
-                    edges_list.append(GraphEdge(source=src, target=tgt, label=edge_lbl))
+                for src in sources:
+                    for tgt in targets:
+                        if src != tgt:
+                            edges_list.append(GraphEdge(source=src, target=tgt, label=edge_lbl))
         else:
             # Isolated node definition or multiple separated nodes
             # If line has multiple nodes (e.g. A[Label] & B[Label])

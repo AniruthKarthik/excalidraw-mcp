@@ -150,6 +150,12 @@ class BatchOperation(BaseModel):
     element_ids: list[str] | None = None
     group_id: str | None = None
     frame_id: str | None = None
+    code: str | None = None
+    language: str | None = None
+    title: str | None = None
+    theme: CodeTheme | None = None
+    font_family: str | None = None
+    line_numbers: bool | None = None
     elbowed: bool | None = None
     roundness: Roundness | None = None
     strokeColor: str | None = None
@@ -254,7 +260,7 @@ class ArchitectureResult(TypedDict):
     node_map: dict[str, dict[str, str | None]]
     edge_map: dict[str, dict[str, str | None]]
     revision: int
-    url: None
+    url: str | None
     next_step: str
 
 
