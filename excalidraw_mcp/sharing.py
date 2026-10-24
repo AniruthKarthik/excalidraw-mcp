@@ -30,9 +30,8 @@ def export_to_excalidraw_url(
     5. Post IV + ciphertext to excalidraw backend.
     6. Return excalidraw.com shareable link with decryption key in hash fragment.
     """
-    if not isinstance(document, dict) or not document.get("elements"):
-        # Even empty scenes or scenes with elements can be uploaded, but validate dict
-        pass
+    if not isinstance(document, dict):
+        raise SceneError("Document must be a valid scene dictionary")
 
     try:
         json_bytes = json.dumps(document, ensure_ascii=False).encode("utf-8")

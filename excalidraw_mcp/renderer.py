@@ -81,7 +81,7 @@ def _compute_bounds(
         w, h = float(el.get("width", 0)), float(el.get("height", 0))
         etype = el.get("type")
 
-        if etype == "arrow":
+        if etype in ("arrow", "line", "freedraw"):
             points = el.get("points") or [[0.0, 0.0], [w, h]]
             for pt in points:
                 px = x + float(pt[0])
@@ -277,7 +277,7 @@ def render_scene_image(
             frames.append(el)
         elif etype in ("rectangle", "diamond", "ellipse"):
             shapes.append(el)
-        elif etype == "arrow":
+        elif etype in ("arrow", "line", "freedraw"):
             arrows.append(el)
         elif etype == "text":
             if el.get("id") not in code_block_text_ids:
@@ -414,7 +414,8 @@ def render_scene_image(
             _draw_polyline(draw, screen_pts, fill=stroke_color, width=stroke_w, stroke_style=a.get("strokeStyle", "solid"))
 
             # Arrowhead at end
-            if a.get("endArrowhead", "arrow") == "arrow":
+            default_end = "arrow" if a.get("type") == "arrow" else None
+            if a.get("endArrowhead", default_end) == "arrow":
                 _draw_arrowhead(
                     draw,
                     screen_pts[-1],

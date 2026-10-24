@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from PIL import Image
 
-from excalidraw_mcp.config import scene_directory
+from excalidraw_mcp.config import max_scene_bytes, scene_directory
 from excalidraw_mcp.document import normalize_document
 from excalidraw_mcp.errors import SceneError
 from excalidraw_mcp.models import new_document, validate_document
@@ -96,6 +96,10 @@ def parse_scene_payload(data: str) -> dict[str, Any]:
     if not isinstance(data, str) or not data.strip():
         raise SceneError("Import data cannot be empty")
 
+    limit = max_scene_bytes()
+    if len(data.encode("utf-8")) > limit:
+        raise SceneError(f"Import payload exceeds maximum size ({limit} bytes)")
+
     cleaned = data.strip()
 
     # Check 1: Is it raw JSON?
@@ -148,6 +152,12 @@ def parse_scene_payload(data: str) -> dict[str, Any]:
                 if resolved.suffix.lower() not in ALLOWED_EXTS:
                     raise SceneError(
                         f"Unsupported file format '{resolved.suffix}'. Supported extensions: {sorted(ALLOWED_EXTS)}"
+                    )
+
+                file_size = candidate_path.stat().st_size
+                if file_size > limit:
+                    raise SceneError(
+                        f"File '{candidate_path}' size ({file_size} bytes) exceeds maximum allowed size ({limit} bytes)"
                     )
 
                 raw_bytes = candidate_path.read_bytes()

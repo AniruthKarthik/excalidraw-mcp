@@ -80,10 +80,10 @@ def _center_label(label, container):
 
 
 def _element_bounds(el):
-    """Accurately compute the bounding box of any element, accounting for arrow points."""
+    """Accurately compute the bounding box of any element, accounting for arrow/line points."""
     x, y = float(el.get("x", 0)), float(el.get("y", 0))
     w, h = float(el.get("width", 0)), float(el.get("height", 0))
-    if el.get("type") == "arrow" and el.get("points"):
+    if el.get("type") in ("arrow", "line", "freedraw") and el.get("points"):
         pts_x = [x + float(p[0]) for p in el["points"]]
         pts_y = [y + float(p[1]) for p in el["points"]]
         return min(pts_x), min(pts_y), max(pts_x), max(pts_y)
