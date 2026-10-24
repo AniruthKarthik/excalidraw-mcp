@@ -141,6 +141,21 @@ A & B --> C & D
         # Compare coordinates: arrows should not share identical starting or ending coordinates
         self.assertNotEqual(arrow1["y"], arrow2["y"])
 
+    def test_library_resource_path_traversal(self):
+        """Ensure get_resource for libraries rejects directory traversal sequences."""
+        with self.assertRaisesRegex(SceneError, "outside permitted directory"):
+            self.service.get_resource(resource_type="library", identifier="../../etc/passwd")
+
+    def test_get_scene_summary_upward_arrow_bounds(self):
+        """Ensure get_scene_summary does not clobber point-aware max_y for upward-pointing arrows."""
+        # Add an arrow pointing upward from y=300 to y=100
+        self.service.add_arrow(100, 300, 200, 100)
+        summary = self.service.get_scene_summary()
+        self.assertIsNotNone(summary["bounds"])
+        self.assertEqual(summary["bounds"]["min_y"], 100)
+        self.assertEqual(summary["bounds"]["max_y"], 300)
+        self.assertEqual(summary["bounds"]["height"], 200)
+
 
 if __name__ == "__main__":
     unittest.main()

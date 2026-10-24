@@ -290,8 +290,17 @@ def get_resource(
     elif res_type == "library":
         lib_key = ident.lower() if ident else "architecture"
         if lib_key not in LIBRARIES:
-            # Check user libraries directory
-            user_lib_path = Path(scene_directory()) / "libraries" / f"{lib_key}.json"
+            # Check user libraries directory safely without allowing path traversal
+            lib_dir = (Path(scene_directory()) / "libraries").resolve()
+            try:
+                user_lib_path = (lib_dir / f"{lib_key}.json").resolve()
+                is_safe = user_lib_path.is_relative_to(lib_dir)
+            except Exception:
+                is_safe = False
+
+            if not is_safe:
+                raise SceneError(f"Library identifier '{ident}' is outside permitted directory")
+
             if user_lib_path.is_file():
                 try:
                     data = json.loads(user_lib_path.read_text(encoding="utf-8"))

@@ -2475,7 +2475,6 @@ class SceneService:
             min_y = min(_element_bounds(el)[1] for el in elements)
             max_x = max(_element_bounds(el)[2] for el in elements)
             max_y = max(_element_bounds(el)[3] for el in elements)
-            max_y = max(el["y"] + el.get("height", 0) for el in elements)
             bounds = {
                 "min_x": min_x,
                 "min_y": min_y,
