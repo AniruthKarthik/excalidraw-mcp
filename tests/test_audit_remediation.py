@@ -156,6 +156,66 @@ A & B --> C & D
         self.assertEqual(summary["bounds"]["max_y"], 300)
         self.assertEqual(summary["bounds"]["height"], 200)
 
+    def test_replace_bumps_modified_element_version(self):
+        """Ensure replace() increments version and assigns versionNonce on modified elements."""
+        res = self.service.add_shape("rectangle", 0, 0, 100, 100)
+        rect_id = res["rectangle_id"]
+        initial_el = self.service.state.get(rect_id)
+        self.assertEqual(initial_el["version"], 1)
+
+        # Mutate width and replace document
+        doc = self.service.state.document()
+        for el in doc["elements"]:
+            if el["id"] == rect_id:
+                el["width"] = 250
+        self.service.state.replace(doc)
+
+        updated_el = self.service.state.get(rect_id)
+        self.assertEqual(updated_el["width"], 250)
+        self.assertEqual(updated_el["version"], 2)
+        self.assertNotEqual(updated_el["versionNonce"], initial_el["versionNonce"])
+
+    def test_observer_can_query_state_without_deadlock(self):
+        """Ensure state observer callbacks execute outside the mutation lock without deadlocking."""
+        observed_queries = []
+
+        def on_change(doc, rev):
+            # Query the state synchronously within the listener callback
+            el = self.service.state.get("observed_box")
+            observed_queries.append((rev, el is not None))
+
+        unsub = self.service.state.subscribe(on_change)
+        try:
+            # Trigger apply / add_shape
+            self.service.add_shape("rectangle", 0, 0, 100, 100)
+            self.assertGreater(len(observed_queries), 0)
+
+            # Trigger replace
+            doc = self.service.state.document()
+            doc["elements"].append({
+                "id": "observed_box",
+                "type": "rectangle",
+                "x": 0, "y": 0, "width": 50, "height": 50,
+                "angle": 0, "strokeColor": "#000", "backgroundColor": "transparent",
+                "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+                "roughness": 1, "opacity": 100, "groupIds": [], "roundness": None,
+                "seed": 1, "version": 1, "versionNonce": 1, "isDeleted": False,
+                "boundElements": [], "updated": 1, "link": None, "locked": False,
+            })
+            self.service.state.replace(doc)
+            self.assertTrue(any(found for _, found in observed_queries))
+        finally:
+            unsub()
+
+    def test_code_block_title_height_without_title(self):
+        """Ensure calculate_code_block_dimensions allocates smaller header when title is omitted."""
+        from excalidraw_mcp.code_blocks import calculate_code_block_dimensions
+
+        code = "\n".join(f"var_{i} = {i}" for i in range(10))
+        _, h_with_title, _, _ = calculate_code_block_dimensions(code, title="Custom Title")
+        _, h_without_title, _, _ = calculate_code_block_dimensions(code, title=None)
+        self.assertGreater(h_with_title, h_without_title)
+
 
 if __name__ == "__main__":
     unittest.main()

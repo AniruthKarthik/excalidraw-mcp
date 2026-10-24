@@ -135,7 +135,7 @@ def calculate_code_block_dimensions(
         digits = len(str(line_count))
         gutter_w = max(32.0, (digits + 2) * char_w)
 
-    title_h = 34.0 if title is not None or True else 16.0
+    title_h = 34.0 if title is not None else 16.0
     content_w = gutter_w + (max_line_len + 3) * char_w + 32.0
     content_h = title_h + (line_count + 1) * line_h + 20.0
 

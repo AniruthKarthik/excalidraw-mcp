@@ -114,7 +114,7 @@ class SceneState:
             self._history.pop(0)
             self._history_bytes -= self._history_sizes.pop(0)
 
-    def _commit(self, document, previous, remember=True):
+    def _commit(self, document, previous, remember=True, notify=True):
         replacement = normalize_document(
             document, validate_assets=document.get("files") != previous.get("files")
         )
@@ -139,10 +139,12 @@ class SceneState:
         self._document = replacement
         self._index = {el["id"]: el for el in replacement["elements"]}
         self._revision += 1
-        self._notify()
+        if notify:
+            self._notify()
         return True
 
     def replace(self, document, expected_revision=None):
+        should_notify = False
         with self._lock:
             if self._editing:
                 raise SceneError("Nested scene mutations are not supported")
@@ -153,14 +155,31 @@ class SceneState:
             replacement = normalize_document(document)
             if replacement == self._document:
                 return
+            old = {el["id"]: el for el in self._document["elements"]}
+            for el in replacement["elements"]:
+                before = old.get(el["id"])
+                if before is not None and before != el:
+                    version = before.get("version", 0)
+                    updated = before.get("updated", 0)
+                    el["version"] = (
+                        version if type(version) is int and version >= 0 else 0
+                    ) + 1
+                    el["versionNonce"] = random.randrange(1, 2**31)
+                    el["updated"] = max(
+                        time.time_ns() // 1_000_000,
+                        (updated if type(updated) is int else 0) + 1,
+                    )
             self._remember(self._document)
             self._document = replacement
             self._index = {el["id"]: el for el in replacement["elements"]}
             self._revision += 1
+            should_notify = True
+        if should_notify:
             self._notify()
 
     def apply(self, operation: Callable[[SceneDocument], T]) -> T:
         """Apply a callback to a private draft. Exceptions roll back all edits."""
+        should_notify = False
         with self._lock:
             if self._editing:
                 raise SceneError("Nested scene mutations are not supported")
@@ -168,10 +187,12 @@ class SceneState:
             try:
                 draft = deepcopy(self._document)
                 result = deepcopy(operation(draft))
-                self._commit(draft, self._document)
-                return result
+                should_notify = self._commit(draft, self._document, notify=False)
             finally:
                 self._editing = False
+        if should_notify:
+            self._notify()
+        return result
 
     def add_many(self, elements):
         incoming = validate_document(new_document(elements))["elements"]
@@ -186,10 +207,13 @@ class SceneState:
         return self.add_many([element])[0]
 
     def clear(self):
+        should_notify = False
         with self._lock:
             if self._editing:
                 raise SceneError("Nested scene mutations are not supported")
-            self._commit(new_document(), self._document)
+            should_notify = self._commit(new_document(), self._document, notify=False)
+        if should_notify:
+            self._notify()
 
     def undo(self):
         with self._lock:
@@ -204,9 +228,10 @@ class SceneState:
             self._document = replacement
             self._index = {el["id"]: el for el in self._document["elements"]}
             self._revision += 1
-            self._notify()
-            return {
+            result = {
                 "status": "undone",
                 "revision": self._revision,
                 "history_depth": len(self._history),
             }
+        self._notify()
+        return result

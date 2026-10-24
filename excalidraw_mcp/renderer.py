@@ -233,7 +233,7 @@ def render_scene_image(
     # Identify bound text elements of code blocks so they are not rendered twice
     code_block_text_ids = set()
     for el in elements:
-        if el.get("customData", {}).get("type") == "code_block":
+        if el.get("customData", {}).get("type") in ("code_block", "code-block"):
             for b in el.get("boundElements", []):
                 if b.get("type") == "text":
                     code_block_text_ids.add(b["id"])
@@ -293,7 +293,7 @@ def render_scene_image(
         custom_data = s.get("customData") or {}
 
         # Specialized rendering for Code Blocks
-        if custom_data.get("type") == "code_block":
+        if custom_data.get("type") in ("code_block", "code-block"):
             _render_code_block(draw, s, sx, sy, sw, sh, scale)
             continue
 
