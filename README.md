@@ -231,7 +231,7 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 | `ungroup_elements` | `element_ids: list[str] = None`<br>`group_id: str = None` | `UngroupResult`<br>`{ status, affected_elements, removed_group_ids, revision }` | Disbands an element group by `group_id` or removes outermost groups from specified elements. |
 | `lock_elements` | `element_ids: list[str]` | `LockResult`<br>`{ status, element_ids, revision }` | Locks elements and bound labels to protect them from unintended moves, resizes, updates, or deletions. |
 | `unlock_elements` | `element_ids: list[str]` | `UnlockResult`<br>`{ status, element_ids, revision }` | Unlocks previously locked elements and bound labels for subsequent editing. |
-| `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, lock, group, or update actions in a single revision step with dynamic `client_id` resolution. |
+| `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, lock, group, duplicate, or update actions in a single revision step with dynamic `client_id` resolution. |
 | `clear` | None | `DeleteResult`<br>`{ status }` | Wipes the entire scene, active elements, and embedded state. |
 | `undo` | None | `UndoResult`<br>`{ status, revision }` | Rolls back the scene to the state immediately preceding the latest mutation. |
 
@@ -256,7 +256,7 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 | `load` | `name: str` | `LoadResult`<br>`{ status, name, elements }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
 | `export_scene` | None | `EmbeddedResource`<br>(`application/vnd.excalidraw+json`) | Emits the entire `.excalidraw` schema v2 document directly into the MCP message. |
 | `preview` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
-| `get_canvas_screenshot` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders the current canvas into an inline PNG screenshot containing embedded `application/vnd.excalidraw+json` metadata. |
+| `get_canvas_screenshot` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Alias for `preview`. Renders the current canvas into an inline PNG screenshot containing embedded `application/vnd.excalidraw+json` metadata. |
 | `export_png` | `name: str`<br>`directory: str | None = None`<br>`scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True`<br>`overwrite: bool = False` | `PngExportResult`<br>`{ status, name, path, bytes, width, height }` | Atomically exports the active scene directly to a PNG image file in a project folder or configured directory. |
 
 ### 5. Live Canvas Server & Browser Synchronization
