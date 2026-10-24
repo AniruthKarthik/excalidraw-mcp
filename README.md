@@ -209,31 +209,31 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `add_rectangle` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a rectangle to the active scene with an optional centered bound label, adaptive/round corner roundness, and frame membership. |
-| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles + `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a circle (ellipse) with an optional centered bound label and frame membership. |
-| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a decision diamond with an optional centered bound label, adaptive roundness, and frame membership. |
-| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ElementResult`<br>`{ id, label_id, revision }` | Adds a directional arrow (straight or elbowed) with an optional midpoint label. |
-| `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles + `frame_id: str = None` | `CreateResult`<br>`{ id, revision }` | Creates a standalone text element with optional frame membership. |
+| `add_rectangle` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `CreateResult`<br>`{ rectangle_id, label_id }` | Adds a rectangle to the active scene with an optional centered bound label, adaptive/round corner roundness, and frame membership. |
+| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles + `frame_id: str = None` | `CreateResult`<br>`{ circle_id, label_id }` | Adds a circle (ellipse) with an optional centered bound label and frame membership. |
+| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `CreateResult`<br>`{ diamond_id, label_id }` | Adds a decision diamond with an optional centered bound label, adaptive roundness, and frame membership. |
+| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `CreateResult`<br>`{ arrow_id, label_id }` | Adds a directional arrow (straight or elbowed) with an optional midpoint label. |
+| `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles + `frame_id: str = None` | `CreateResult`<br>`{ text_id }` | Creates a standalone text element with optional frame membership. |
 | `add_code_block` | `code: str`<br>`language: str = "python"`<br>`x: float = 0`, `y: float = 0`<br>`title: str = None`<br>`theme: str = "dark"`<br>`font_size: int = 14`<br>`line_numbers: bool = True`<br>`w: float = None`, `h: float = None`<br>`frame_id: str = None` | `CodeBlockResult`<br>`{ status, container_id, text_id, width, height, revision }` | Adds a syntax-highlighted code block with window controls, configurable themes, line numbers, and typography. |
-| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id, revision }` | Binds two existing shapes with a self-docking straight or elbowed arrow that tracks shape movement. |
-| `add_frame` | `name: str = ""`, `x: float`, `y: float`, `w: float`, `h: float`<br>`element_ids: list[str] = None` | `CreateResult`<br>`{ id, revision }` | Creates an Excalidraw frame container and optionally parents specified elements inside it. |
+| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id }` | Binds two existing shapes with a self-docking straight or elbowed arrow that tracks shape movement. |
+| `add_frame` | `name: str = ""`, `x: float`, `y: float`, `w: float`, `h: float`<br>`element_ids: list[str] = None` | `CreateResult`<br>`{ frame_id }` | Creates an Excalidraw frame container and optionally parents specified elements inside it. |
 
 ### 3. Scene Editing & Manipulation
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
 | `duplicate_elements` | `element_ids: list[str]`<br>`offset_x: float = 20.0`<br>`offset_y: float = 20.0` | `DuplicateResult`<br>`{ status, original_ids, duplicated_ids, id_mapping, revision }` | Duplicates multiple elements with spatial offsets, relationship remapping, arrow endpoint retargeting, bound label cloning, and group isolation. |
-| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ element_id, x, y, revision }` | Repositions an element. Moving a frame moves all contained elements; moving grouped elements moves group members together; rejects locked elements. |
-| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ element_id, width, height, revision }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows; rejects locked elements. |
-| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ element_id, label_id, revision }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment; rejects locked elements. |
-| `delete` | `element_id: str` | `DeleteResult`<br>`{ deleted_id, deleted_label_id, revision }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows; rejects locked elements. |
+| `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ status, element_id, x, y }` | Repositions an element. Moving a frame moves all contained elements; moving grouped elements moves group members together; rejects locked elements. |
+| `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ status, element_id, width, height }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows; rejects locked elements. |
+| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ status, element_id, label_id }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment; rejects locked elements. |
+| `delete` | `element_id: str` | `DeleteResult`<br>`{ status, deleted_ids }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows; rejects locked elements. |
 | `group_elements` | `element_ids: list[str]` | `GroupResult`<br>`{ status, group_id, element_ids, revision }` | Groups multiple elements together so that movements and transformations apply cohesively. |
 | `ungroup_elements` | `element_ids: list[str] = None`<br>`group_id: str = None` | `UngroupResult`<br>`{ status, affected_elements, removed_group_ids, revision }` | Disbands an element group by `group_id` or removes outermost groups from specified elements. |
 | `lock_elements` | `element_ids: list[str]` | `LockResult`<br>`{ status, element_ids, revision }` | Locks elements and bound labels to protect them from unintended moves, resizes, updates, or deletions. |
 | `unlock_elements` | `element_ids: list[str]` | `UnlockResult`<br>`{ status, element_ids, revision }` | Unlocks previously locked elements and bound labels for subsequent editing. |
 | `batch_mutate` | `operations: list[dict]` | `BatchResult`<br>`{ status, operations_executed, ref_map, results, revision }` | Atomically executes multiple creation, connection, movement, resize, lock, group, or update actions in a single revision step with dynamic `client_id` resolution. |
-| `clear` | None | `DeleteResult`<br>`{ deleted: true, revision }` | Wipes the entire scene, active elements, and embedded state. |
-| `undo` | None | `UndoResult`<br>`{ restored_revision, available_history }` | Rolls back the scene to the state immediately preceding the latest mutation. |
+| `clear` | None | `DeleteResult`<br>`{ status }` | Wipes the entire scene, active elements, and embedded state. |
+| `undo` | None | `UndoResult`<br>`{ status, revision }` | Rolls back the scene to the state immediately preceding the latest mutation. |
 
 ### 4. Inspection, Viewport, Query, Export & Sharing
 
@@ -252,12 +252,12 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 | `get_scene` | `offset: int = 0`, `limit: int = 50` | `ScenePage`<br>`{ elements, total, offset, limit, has_more, revision }` | Paginated inspection of all elements currently on the canvas. |
 | `get_element` | `element_id: str` | `ElementResult`<br>`{ element, revision }` | Fetches details and properties of a single element by its ID. |
 | `list_saved_scenes`| None | `SavedScenesResult`<br>`{ scenes: list[str] }` | Returns a list of all scene files stored in the persistent directory. |
-| `save` | `name: str`, `overwrite: bool = False` | `SaveResult`<br>`{ name, revision, path }` | Atomically writes the scene to server disk in `.excalidraw` JSON format. |
-| `load` | `name: str` | `LoadResult`<br>`{ name, revision, element_count }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
+| `save` | `name: str`, `overwrite: bool = False` | `SaveResult`<br>`{ status, name, path }` | Atomically writes the scene to server disk in `.excalidraw` JSON format. |
+| `load` | `name: str` | `LoadResult`<br>`{ status, name, elements }` | Atomically loads a saved `.excalidraw` file and sets it as the active scene. |
 | `export_scene` | None | `EmbeddedResource`<br>(`application/vnd.excalidraw+json`) | Emits the entire `.excalidraw` schema v2 document directly into the MCP message. |
 | `preview` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders an inline PNG image preview of the active Excalidraw canvas directly into the chat conversation. |
 | `get_canvas_screenshot` | `scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True` | `ImageContent`<br>(`image/png`) | Renders the current canvas into an inline PNG screenshot containing embedded `application/vnd.excalidraw+json` metadata. |
-| `export_png` | `name: str`<br>`directory: str | None = None`<br>`scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True`<br>`overwrite: bool = False` | `PngExportResult`<br>`{ status, name, path, bytes, width, height, scale, revision }` | Atomically exports the active scene directly to a PNG image file in a project folder or configured directory. |
+| `export_png` | `name: str`<br>`directory: str | None = None`<br>`scale: float = 1.0`<br>`padding: int = 40`<br>`background: bool = True`<br>`overwrite: bool = False` | `PngExportResult`<br>`{ status, name, path, bytes, width, height }` | Atomically exports the active scene directly to a PNG image file in a project folder or configured directory. |
 
 ### 5. Live Canvas Server & Browser Synchronization
 
@@ -285,7 +285,7 @@ The server operates with secure defaults and zero required environment variables
 
 | Variable | Default | Allowed Values | Description |
 |---|---|---|---|
-| `EXCALIDRAW_SCENE_DIR` | Platform User Data | Absolute path | Directory where scenes are persisted. Defaults to `$XDG_DATA_HOME/excalidraw-mcp/scenes` on Linux, and `~/Library/Application Support/excalidraw-mcp/scenes` on macOS. |
+| `EXCALIDRAW_SCENE_DIR` | Platform User Data | Absolute path | Directory where scenes are persisted. Defaults to `$XDG_DATA_HOME/excalidraw-mcp/scenes` on Linux, `~/Library/Application Support/excalidraw-mcp/scenes` on macOS, and `%APPDATA%\excalidraw-mcp\scenes` on Windows. |
 | `EXCALIDRAW_EXPORT_DIR` | `$EXCALIDRAW_SCENE_DIR/exports` | Absolute path | Configurable directory where PNG diagram exports are saved by default. |
 | `EXCALIDRAW_DEFAULT_FONT` | Platform Sans Font | Font family name | Preferred system font family for regular diagram text and labels. |
 | `EXCALIDRAW_MONO_FONT` | Platform Monospace Font | Font family name | Preferred monospace font family for code blocks and code annotations. |
