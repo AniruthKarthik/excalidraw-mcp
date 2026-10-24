@@ -731,14 +731,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         padding: PreviewPadding = 40,
         background: Boolean = True,
     ) -> Image:
-        """Render the current live canvas to an inline PNG screenshot with embedded Excalidraw metadata."""
-        png_bytes = invoke(
-            service.preview,
-            scale=scale,
-            padding=padding,
-            background=background,
-        )
-        return Image(data=png_bytes, format="png")
+        """Alias for preview. Render an inline PNG screenshot of the current canvas with embedded metadata."""
+        return preview(scale=scale, padding=padding, background=background)
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
     def get_resource(

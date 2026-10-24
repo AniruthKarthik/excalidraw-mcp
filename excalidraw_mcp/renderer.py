@@ -137,6 +137,33 @@ def _draw_dashed_line(
         cur += dash_len + gap_len
 
 
+def _draw_polyline(
+    draw: ImageDraw.ImageDraw,
+    pts: list[tuple[float, float]],
+    fill: tuple[int, int, int, int],
+    width: int = 1,
+    stroke_style: str = "solid",
+):
+    """Draw a polyline supporting solid, dashed, and dotted styles."""
+    if len(pts) < 2:
+        return
+    if stroke_style not in ("dashed", "dotted"):
+        draw.line(pts, fill=fill, width=width)
+        return
+
+    dash_len, gap_len = (8.0, 5.0) if stroke_style == "dashed" else (3.0, 3.0)
+    for i in range(len(pts) - 1):
+        _draw_dashed_line(
+            draw,
+            pts[i],
+            pts[i + 1],
+            fill=fill,
+            width=width,
+            dash_len=dash_len,
+            gap_len=gap_len,
+        )
+
+
 def _draw_arrowhead(
     draw: ImageDraw.ImageDraw,
     tip: tuple[float, float],
@@ -319,7 +346,19 @@ def render_scene_image(
             fill_val = bg_fill if bg_fill[3] > 0 else None
             outline_val = stroke_color if stroke_color[3] > 0 else None
 
-            if radius > 0:
+            stroke_style = s.get("strokeStyle", "solid")
+            if stroke_style in ("dashed", "dotted") and outline_val:
+                if fill_val:
+                    if radius > 0:
+                        draw.rounded_rectangle([sx, sy, sx + sw, sy + sh], radius=radius, fill=fill_val, outline=None)
+                    else:
+                        draw.rectangle([sx, sy, sx + sw, sy + sh], fill=fill_val, outline=None)
+                p_tl = (sx, sy)
+                p_tr = (sx + sw, sy)
+                p_br = (sx + sw, sy + sh)
+                p_bl = (sx, sy + sh)
+                _draw_polyline(draw, [p_tl, p_tr, p_br, p_bl, p_tl], fill=outline_val, width=stroke_w, stroke_style=stroke_style)
+            elif radius > 0:
                 draw.rounded_rectangle(
                     [sx, sy, sx + sw, sy + sh],
                     radius=radius,
@@ -352,10 +391,14 @@ def render_scene_image(
             left = (sx, sy + sh / 2)
             pts = [top, right, bottom, left]
 
+            stroke_style = s.get("strokeStyle", "solid")
             if bg_fill[3] > 0:
                 draw.polygon(pts, fill=bg_fill)
             if stroke_color[3] > 0:
-                draw.polygon(pts, outline=stroke_color, width=stroke_w)
+                if stroke_style in ("dashed", "dotted"):
+                    _draw_polyline(draw, [top, right, bottom, left, top], fill=stroke_color, width=stroke_w, stroke_style=stroke_style)
+                else:
+                    draw.polygon(pts, outline=stroke_color, width=stroke_w)
 
     # 3. Render Arrows
     for a in arrows:
@@ -368,7 +411,7 @@ def render_scene_image(
 
         screen_pts = [(tx(ax + pt[0]), ty(ay + pt[1])) for pt in points]
         if len(screen_pts) >= 2:
-            draw.line(screen_pts, fill=stroke_color, width=stroke_w)
+            _draw_polyline(draw, screen_pts, fill=stroke_color, width=stroke_w, stroke_style=a.get("strokeStyle", "solid"))
 
             # Arrowhead at end
             if a.get("endArrowhead", "arrow") == "arrow":

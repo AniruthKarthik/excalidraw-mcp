@@ -1014,12 +1014,15 @@ class SceneService:
 
             def resolve(val):
                 if isinstance(val, str):
-                    return ref_map.get(val, val)
+                    if val in ref_map:
+                        return ref_map[val]
+                    if val.startswith("client:") and val[7:] in ref_map:
+                        return ref_map[val[7:]]
                 return val
 
             def resolve_list(vals):
                 if isinstance(vals, list):
-                    return [ref_map.get(v, v) for v in vals]
+                    return [resolve(v) for v in vals]
                 return vals
 
             for i, raw_op in enumerate(operations):
@@ -1816,6 +1819,101 @@ class SceneService:
                         }
                     )
 
+                elif action in ("duplicate", "duplicate_elements"):
+                    import random
+                    import uuid
+                    from copy import deepcopy
+
+                    raw_eids = op.get("element_ids") or (
+                        [op.get("element_id")] if op.get("element_id") else None
+                    )
+                    eids = resolve_list(raw_eids)
+                    if not eids:
+                        raise SceneError(
+                            f"Operation {i} ({action}): element_ids must be a non-empty list of IDs"
+                        )
+                    offset_x = float(op.get("offset_x", 20.0))
+                    offset_y = float(op.get("offset_y", 20.0))
+                    for target_eid in eids:
+                        _require(index, target_eid)
+
+                    targets_set = list(eids)
+                    for target_eid in eids:
+                        lbl = _label_for(index, target_eid)
+                        if lbl and lbl["id"] not in targets_set:
+                            targets_set.append(lbl["id"])
+
+                    dup_id_map = {
+                        old_id: f"{index[old_id]['type']}_{uuid.uuid4().hex[:10]}"
+                        for old_id in targets_set
+                    }
+                    dup_group_map = {}
+                    for old_id in targets_set:
+                        for gid in index[old_id].get("groupIds", []):
+                            if gid not in dup_group_map:
+                                dup_group_map[gid] = f"grp_{uuid.uuid4().hex[:12]}"
+
+                    for old_id in targets_set:
+                        orig = index[old_id]
+                        cloned = deepcopy(orig)
+                        cloned["id"] = dup_id_map[old_id]
+                        cloned["x"] += offset_x
+                        cloned["y"] += offset_y
+                        cloned["seed"] = random.randrange(1, 2**31)
+                        cloned["versionNonce"] = random.randrange(1, 2**31)
+                        cloned["version"] = 1
+                        cloned["locked"] = False
+
+                        if cloned.get("containerId") and cloned["containerId"] in dup_id_map:
+                            cloned["containerId"] = dup_id_map[cloned["containerId"]]
+                        elif cloned.get("containerId"):
+                            cloned["containerId"] = None
+
+                        if cloned.get("frameId") and cloned["frameId"] in dup_id_map:
+                            cloned["frameId"] = dup_id_map[cloned["frameId"]]
+                        elif cloned.get("frameId") and cloned["frameId"] not in index:
+                            cloned["frameId"] = None
+
+                        if cloned.get("boundElements"):
+                            cloned["boundElements"] = [
+                                {**b, "id": dup_id_map[b["id"]]}
+                                for b in cloned["boundElements"]
+                                if b["id"] in dup_id_map
+                            ]
+
+                        if cloned.get("groupIds"):
+                            cloned["groupIds"] = [
+                                dup_group_map[gid]
+                                for gid in cloned["groupIds"]
+                                if gid in dup_group_map
+                            ]
+
+                        if cloned.get("type") == "arrow":
+                            for end in ("startBinding", "endBinding"):
+                                binding = cloned.get(end)
+                                if binding:
+                                    src_id = binding.get("elementId")
+                                    if src_id in dup_id_map:
+                                        binding["elementId"] = dup_id_map[src_id]
+                                    else:
+                                        cloned[end] = None
+
+                        index[cloned["id"]] = cloned
+                        document["elements"].append(cloned)
+
+                    duplicated_ids = [dup_id_map[eid] for eid in eids]
+                    if client_id:
+                        ref_map[client_id] = duplicated_ids[0]
+                    results.append(
+                        {
+                            "action": action,
+                            "status": "duplicated",
+                            "original_ids": eids,
+                            "duplicated_ids": duplicated_ids,
+                            "id_mapping": dup_id_map,
+                        }
+                    )
+
                 else:
                     raise SceneError(f"Unknown action '{action}' at operation {i}")
 
@@ -1970,6 +2068,19 @@ class SceneService:
         )
         for node in positioned:
             f_id = cluster_map.get(node.get("frame_id"))
+            node_style = dict(style)
+            for k in (
+                "strokeColor",
+                "backgroundColor",
+                "fillStyle",
+                "strokeWidth",
+                "strokeStyle",
+                "opacity",
+                "roughness",
+                "roundness",
+            ):
+                if node.get(k) is not None:
+                    node_style[k] = node[k]
             group = _shape_elements(
                 node["shape"],
                 node["x"],
@@ -1977,7 +2088,7 @@ class SceneService:
                 node["w"],
                 node["h"],
                 node["label"],
-                style,
+                node_style,
                 frame_id=f_id,
             )
             elements.extend(group)
@@ -2017,8 +2128,18 @@ class SceneService:
                     start = (start[0] + nx * offset_mag, start[1] + ny * offset_mag)
                     end = (end[0] + nx * offset_mag, end[1] + ny * offset_mag)
 
+            edge_style = dict(style)
+            for k in (
+                "strokeColor",
+                "strokeWidth",
+                "strokeStyle",
+                "opacity",
+                "roughness",
+            ):
+                if edge.get(k) is not None:
+                    edge_style[k] = edge[k]
             edge_elbowed = edge.get("elbowed", elbowed)
-            connector = arrow(*start, *end, elbowed=edge_elbowed, **style)
+            connector = arrow(*start, *end, elbowed=edge_elbowed, **edge_style)
             connector["startBinding"] = {
                 "elementId": id_map[edge["source"]]["element_id"],
                 "focus": 0,

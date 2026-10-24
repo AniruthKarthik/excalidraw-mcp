@@ -216,6 +216,69 @@ A & B --> C & D
         _, h_without_title, _, _ = calculate_code_block_dimensions(code, title=None)
         self.assertGreater(h_with_title, h_without_title)
 
+    def test_graph_node_and_edge_individual_styles(self):
+        """Ensure draw_graph respects per-node and per-edge custom colors and styles."""
+        nodes = [
+            {"id": "n1", "label": "Red Node", "backgroundColor": "#ff0000", "strokeColor": "#990000"},
+            {"id": "n2", "label": "Green Node", "backgroundColor": "#00ff00", "strokeColor": "#009900"},
+        ]
+        edges = [
+            {"source": "n1", "target": "n2", "strokeColor": "#0000ff", "strokeStyle": "dashed"},
+        ]
+        res = self.service.draw_graph(nodes, edges)
+        node1_el = self.service.state.get(res["node_map"]["n1"]["element_id"])
+        node2_el = self.service.state.get(res["node_map"]["n2"]["element_id"])
+        edge_id = list(res["edge_map"].values())[0]["element_id"]
+        edge_el = self.service.state.get(edge_id)
+
+        self.assertEqual(node1_el["backgroundColor"], "#ff0000")
+        self.assertEqual(node1_el["strokeColor"], "#990000")
+        self.assertEqual(node2_el["backgroundColor"], "#00ff00")
+        self.assertEqual(node2_el["strokeColor"], "#009900")
+        self.assertEqual(edge_el["strokeColor"], "#0000ff")
+        self.assertEqual(edge_el["strokeStyle"], "dashed")
+
+    def test_batch_mutate_duplicate_elements(self):
+        """Ensure batch_mutate supports duplicate action atomically with client_id references."""
+        rect = self.service.add_shape("rectangle", 10, 20, 100, 80)
+        orig_id = rect["rectangle_id"]
+
+        ops = [
+            {
+                "action": "duplicate",
+                "element_ids": [orig_id],
+                "offset_x": 40.0,
+                "offset_y": 60.0,
+                "client_id": "cloned_box",
+            },
+            {
+                "action": "update_element",
+                "element_id": "client:cloned_box",
+                "strokeColor": "#e03131",
+            },
+        ]
+        batch_res = self.service.batch_mutate(ops)
+        self.assertEqual(batch_res["status"], "batch executed")
+        self.assertEqual(batch_res["operations_executed"], 2)
+
+        cloned_id = batch_res["ref_map"]["cloned_box"]
+        cloned_el = self.service.state.get(cloned_id)
+        self.assertEqual(cloned_el["x"], 50.0)
+        self.assertEqual(cloned_el["y"], 80.0)
+        self.assertEqual(cloned_el["strokeColor"], "#e03131")
+
+    def test_renderer_dashed_and_dotted_strokes(self):
+        """Ensure PNG renderer processes dashed/dotted shapes and connectors cleanly."""
+        from excalidraw_mcp.renderer import render_scene_to_png
+
+        self.service.add_shape("rectangle", 0, 0, 100, 80, strokeStyle="dashed")
+        self.service.add_shape("diamond", 150, 0, 100, 80, strokeStyle="dotted")
+        self.service.add_arrow(50, 80, 200, 80, strokeStyle="dashed")
+
+        doc, _ = self.service.state.snapshot()
+        png_bytes = render_scene_to_png(doc)
+        self.assertTrue(png_bytes.startswith(b"\x89PNG\r\n\x1a\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

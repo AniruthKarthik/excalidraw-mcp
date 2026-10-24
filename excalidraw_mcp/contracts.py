@@ -48,6 +48,13 @@ class GraphNode(BaseModel):
     ]
     shape: ShapeType = "rectangle"
     cluster: ElementId | None = None
+    strokeColor: Color | None = None
+    backgroundColor: Color | None = None
+    fillStyle: FillStyle | None = None
+    strokeWidth: StrokeWidth | None = None
+    strokeStyle: StrokeStyle | None = None
+    opacity: Opacity | None = None
+    roundness: Roundness | None = None
 
 
 class GraphCluster(BaseModel):
@@ -64,6 +71,11 @@ class GraphEdge(BaseModel):
     source: ElementId
     target: ElementId
     label: Label = ""
+    elbowed: Boolean = False
+    strokeColor: Color | None = None
+    strokeWidth: StrokeWidth | None = None
+    strokeStyle: StrokeStyle | None = None
+    opacity: Opacity | None = None
 
     @model_validator(mode="after")
     def distinct_ends(self):
@@ -129,6 +141,8 @@ class BatchOperation(BaseModel):
         "unlock",
         "group",
         "ungroup",
+        "duplicate",
+        "duplicate_elements",
     ]
     client_id: str | None = None
     x: float | None = None
@@ -148,6 +162,8 @@ class BatchOperation(BaseModel):
     source_id: str | None = None
     target_id: str | None = None
     element_ids: list[str] | None = None
+    offset_x: float | None = None
+    offset_y: float | None = None
     group_id: str | None = None
     frame_id: str | None = None
     code: str | None = None
