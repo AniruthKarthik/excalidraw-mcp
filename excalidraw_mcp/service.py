@@ -851,7 +851,7 @@ class SceneService:
         return {
             **result,
             "url": None,
-            "next_step": "Use save(name) or export_scene(), then import the document into Excalidraw.",
+            "next_step": "Use save(name), export_scene(), or export_to_excalidraw_url() to export or share the document.",
         }
 
     def add_frame(self, name, x, y, w, h, element_ids=None, **style):
@@ -2415,7 +2415,7 @@ class SceneService:
                 ),
             }
 
-        res = self.state.apply(apply_viewport)
+        res = self.state.apply(apply_viewport, remember=False)
         return {**res, "revision": self.state.revision}
 
     def focus_elements(
@@ -2503,7 +2503,7 @@ class SceneService:
                 "focused_element_ids": [el["id"] for el in targets],
             }
 
-        res = self.state.apply(apply_focus)
+        res = self.state.apply(apply_focus, remember=False)
         return {**res, "revision": self.state.revision}
 
     def get_scene_summary(self):

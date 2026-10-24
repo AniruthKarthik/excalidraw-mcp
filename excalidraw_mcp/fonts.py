@@ -80,6 +80,9 @@ class FontRegistry:
         if self._discovered and not force:
             return
 
+        if force:
+            self.load_font.cache_clear()
+
         self._fonts.clear()
         self._by_family.clear()
         for cat in self._by_category:

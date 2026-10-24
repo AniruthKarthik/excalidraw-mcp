@@ -121,6 +121,17 @@ def parse_mermaid(
     if not lines:
         raise SceneError("Mermaid code contains no content")
 
+    unsupported_match = re.match(
+        r"^(?:sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|gitGraph|pie|journey|mindmap|quadrantChart|C4Context|C4Container|C4Component)\b",
+        lines[0],
+        re.IGNORECASE,
+    )
+    if unsupported_match:
+        diagram_type = unsupported_match.group(0)
+        raise SceneError(
+            f"Mermaid '{diagram_type}' diagrams are not supported yet. Only flowchart and graph diagrams ('flowchart TD', 'flowchart LR', 'graph TD', 'graph LR') can be rendered."
+        )
+
     detected_direction: Direction = "horizontal"
     start_idx = 0
 

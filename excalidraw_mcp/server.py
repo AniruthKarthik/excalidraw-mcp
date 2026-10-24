@@ -64,6 +64,7 @@ from excalidraw_mcp.contracts import (
     SceneName,
     ScenePage,
     SceneSummaryResult,
+    ShapeType,
     ShareUrlResult,
     StatusResult,
     StrokeStyle,
@@ -709,7 +710,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
     def get_scene_summary() -> SceneSummaryResult:
-        """Get a structured semantic overview and topological summary of the diagram for LLM understanding."""
+        """Return structured numerical metrics and topological metadata (counts, element dimensions, layers, code blocks, text contents) for layout planning."""
         return invoke(service.get_scene_summary)
 
     @mcp.tool(
@@ -722,7 +723,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)
     def describe_scene(detailed: Boolean = True) -> SceneDescriptionResult:
-        """Produce an AI-readable summary of elements, positions, labels, connections, and layout."""
+        """Generate a human/agent-readable natural language prose description of the diagram's spatial layout, clusters, and connectivity for cognitive verification."""
         return invoke(service.describe_scene, detailed=detailed)
 
     @mcp.tool(annotations=READ_ONLY, run_in_thread=False)

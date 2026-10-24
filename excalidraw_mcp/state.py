@@ -177,7 +177,7 @@ class SceneState:
         if should_notify:
             self._notify()
 
-    def apply(self, operation: Callable[[SceneDocument], T]) -> T:
+    def apply(self, operation: Callable[[SceneDocument], T], remember: bool = True) -> T:
         """Apply a callback to a private draft. Exceptions roll back all edits."""
         should_notify = False
         with self._lock:
@@ -187,7 +187,9 @@ class SceneState:
             try:
                 draft = deepcopy(self._document)
                 result = deepcopy(operation(draft))
-                should_notify = self._commit(draft, self._document, notify=False)
+                should_notify = self._commit(
+                    draft, self._document, remember=remember, notify=False
+                )
             finally:
                 self._editing = False
         if should_notify:
