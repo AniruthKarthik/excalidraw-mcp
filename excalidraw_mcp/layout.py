@@ -3,6 +3,7 @@
 import math
 import textwrap
 from collections import defaultdict, deque
+from typing import Any
 
 from excalidraw_mcp.errors import SceneError
 
@@ -530,3 +531,460 @@ def boundary_point(node, target, coincident_direction=1):
         cx + local_x * cosine - local_y * sine,
         cy + local_x * sine + local_y * cosine,
     )
+
+
+def check_diagram_geometry(document_or_elements, min_gap=30.0):
+    """Analyze diagram elements for geometric collisions, gap violations, and frame containment.
+
+    Returns a structured dictionary of geometry diagnostics.
+    """
+    if isinstance(document_or_elements, dict) and "elements" in document_or_elements:
+        elements = document_or_elements["elements"]
+    elif isinstance(document_or_elements, list):
+        elements = document_or_elements
+    else:
+        raise SceneError("Expected document dictionary or list of elements")
+
+    active = [e for e in elements if not e.get("isDeleted")]
+    shapes = [
+        e
+        for e in active
+        if e.get("type") in ("rectangle", "diamond", "ellipse")
+        and not (e.get("customData", {}).get("type") in ("code_block_header",))
+    ]
+    frames = [e for e in active if e.get("type") == "frame"]
+    text_els = [e for e in active if e.get("type") == "text"]
+    bound_map = {t["containerId"]: t for t in text_els if t.get("containerId")}
+
+    overlaps = []
+    gap_violations = []
+    containment_violations = []
+
+    # 1. Shape-to-shape bounding box overlap check
+    for i in range(len(shapes)):
+        s1 = shapes[i]
+        x1_min, y1_min = float(s1.get("x", 0)), float(s1.get("y", 0))
+        x1_max, y1_max = x1_min + float(s1.get("width", 0)), y1_min + float(s1.get("height", 0))
+
+        for j in range(i + 1, len(shapes)):
+            s2 = shapes[j]
+            x2_min, y2_min = float(s2.get("x", 0)), float(s2.get("y", 0))
+            x2_max, y2_max = x2_min + float(s2.get("width", 0)), y2_min + float(s2.get("height", 0))
+
+            inter_x = max(0.0, min(x1_max, x2_max) - max(x1_min, x2_min))
+            inter_y = max(0.0, min(y1_max, y2_max) - max(y1_min, y2_min))
+
+            if inter_x > 0.5 and inter_y > 0.5:
+                overlaps.append(
+                    {
+                        "shape1_id": s1["id"],
+                        "shape2_id": s2["id"],
+                        "overlap_width": round(inter_x, 1),
+                        "overlap_height": round(inter_y, 1),
+                        "shape1_label": bound_map.get(s1["id"], {}).get("text", "")[:30],
+                        "shape2_label": bound_map.get(s2["id"], {}).get("text", "")[:30],
+                    }
+                )
+
+    # 2. Frame containment check
+    for f in frames:
+        fid = f["id"]
+        fx, fy = float(f.get("x", 0)), float(f.get("y", 0))
+        fw, fh = float(f.get("width", 0)), float(f.get("height", 0))
+        f_right, f_bottom = fx + fw, fy + fh
+        fname = f.get("name", fid)
+
+        # Children with explicit frameId, or spatial containment
+        children = [
+            s
+            for s in shapes
+            if s.get("frameId") == fid
+            or (
+                s.get("frameId") is None
+                and fx - 20 <= (s.get("x", 0) + s.get("width", 0) / 2.0) <= f_right + 20
+                and fy - 20 <= (s.get("y", 0) + s.get("height", 0) / 2.0) <= f_bottom + 100
+            )
+        ]
+
+        for c in children:
+            cx, cy = float(c.get("x", 0)), float(c.get("y", 0))
+            cw, ch = float(c.get("width", 0)), float(c.get("height", 0))
+            c_right, c_bottom = cx + cw, cy + ch
+
+            overflow_x = max(0.0, fx - cx) + max(0.0, c_right - f_right)
+            overflow_y = max(0.0, fy - cy) + max(0.0, c_bottom - f_bottom)
+
+            if overflow_x > 1.0 or overflow_y > 1.0:
+                containment_violations.append(
+                    {
+                        "frame_id": fid,
+                        "frame_name": fname,
+                        "shape_id": c["id"],
+                        "shape_label": bound_map.get(c["id"], {}).get("text", "")[:30],
+                        "overflow_x": round(overflow_x, 1),
+                        "overflow_y": round(overflow_y, 1),
+                    }
+                )
+
+    return {
+        "valid": len(overlaps) == 0 and len(containment_violations) == 0,
+        "overlap_count": len(overlaps),
+        "overlaps": overlaps,
+        "containment_violations": containment_violations,
+        "gap_violations": gap_violations,
+    }
+
+
+def resolve_scene_layout(
+    document_or_elements,
+    min_gap_x=35.0,
+    min_gap_y=40.0,
+    layer_gap=50.0,
+    frame_padding=30.0,
+    header_pad=30.0,
+):
+    """Systematically resolve shape collisions, expand frames, and propagate downstream layer spacing.
+
+    Ensures zero unintended overlaps, strict frame containment, and readable connector routing.
+    """
+    if isinstance(document_or_elements, dict) and "elements" in document_or_elements:
+        elements = document_or_elements["elements"]
+        is_doc = True
+    elif isinstance(document_or_elements, list):
+        elements = document_or_elements
+        is_doc = False
+    else:
+        raise SceneError("Expected document dictionary or list of elements")
+
+    active = [e for e in elements if not e.get("isDeleted")]
+    frames = [e for e in active if e.get("type") == "frame"]
+    shapes = [e for e in active if e.get("type") in ("rectangle", "diamond", "ellipse")]
+    arrows = [e for e in active if e.get("type") in ("arrow", "line")]
+    texts = [e for e in active if e.get("type") == "text"]
+
+    element_index = {e["id"]: e for e in active if e.get("id")}
+    bound_labels = {t["containerId"]: t for t in texts if t.get("containerId")}
+
+    if not shapes:
+        return document_or_elements
+
+    # Step 1: Match shapes to frames by explicit frameId or spatial proximity
+    frame_shapes = {f["id"]: [] for f in frames}
+    unframed_shapes = []
+
+    for s in shapes:
+        fid = s.get("frameId")
+        if not fid or fid not in frame_shapes:
+            cx = float(s["x"]) + float(s["width"]) / 2.0
+            cy = float(s["y"]) + float(s["height"]) / 2.0
+            best_f = None
+            best_dist = float("inf")
+            for f in frames:
+                fx, fy = float(f["x"]), float(f["y"])
+                fw, fh = float(f["width"]), float(f["height"])
+                if fx - 50 <= cx <= fx + fw + 50 and fy - 50 <= cy <= fy + fh + 350:
+                    dist = abs(cy - (fy + fh / 2.0))
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_f = f["id"]
+            if best_f:
+                s["frameId"] = best_f
+                fid = best_f
+
+        if fid in frame_shapes:
+            frame_shapes[fid].append(s)
+        else:
+            unframed_shapes.append(s)
+
+    # Step 2: Classify frames into Main Vertical Stack, Side Columns, and Bottom Banners
+    main_frames = []
+    side_frames = []
+    banner_frames = []
+
+    for f in frames:
+        fw, fh = float(f["width"]), float(f["height"])
+        fx, fy = float(f["x"]), float(f["y"])
+        if fx > 1600 and fh > 800:
+            side_frames.append(f)
+        elif fw > 2000 and fy > 1500:
+            banner_frames.append(f)
+        else:
+            main_frames.append(f)
+
+    main_frames.sort(key=lambda f: float(f["y"]))
+    side_frames.sort(key=lambda f: float(f["y"]))
+    banner_frames.sort(key=lambda f: float(f["y"]))
+
+    # Step 3: Intra-Frame Row Clustering and De-Collision
+    for f in frames:
+        children = frame_shapes.get(f["id"], [])
+        if not children:
+            continue
+
+        sorted_by_y = sorted(children, key=lambda s: float(s["y"]))
+        rows = []
+        for s in sorted_by_y:
+            sy = float(s["y"])
+            placed = False
+            for r in rows:
+                avg_y = sum(float(item["y"]) for item in r) / len(r)
+                if abs(sy - avg_y) <= 80.0:
+                    r.append(s)
+                    placed = True
+                    break
+            if not placed:
+                rows.append([s])
+
+        rows.sort(key=lambda r: sum(float(s["y"]) for s in r) / len(r))
+
+        cur_y = float(f["y"]) + frame_padding + header_pad
+        for r in rows:
+            r.sort(key=lambda s: float(s["x"]))
+            cur_x = float(f["x"]) + frame_padding
+            row_h = max(float(s["height"]) for s in r)
+            for s in r:
+                s["x"] = cur_x
+                s["y"] = cur_y
+                cur_x += float(s["width"]) + min_gap_x
+            cur_y += row_h + min_gap_y
+
+        # Expand frame dimensions to contain all children
+        min_x = min(float(s["x"]) for s in children) - frame_padding
+        max_x = max(float(s["x"]) + float(s["width"]) for s in children) + frame_padding
+        max_y = max(float(s["y"]) + float(s["height"]) for s in children) + frame_padding
+        f["x"] = min_x
+        f["width"] = max_x - min_x
+        f["height"] = max_y - float(f["y"])
+
+    # Step 4: Vertical Spatial Propagation on Main Stack
+    if main_frames:
+        cur_stack_y = float(main_frames[0]["y"])
+        max_main_w = max((float(f["width"]) for f in main_frames), default=1600.0)
+
+        for f in main_frames:
+            fy = float(f["y"])
+            delta_y = cur_stack_y - fy
+            f["y"] = cur_stack_y
+            for s in frame_shapes.get(f["id"], []):
+                s["y"] = float(s["y"]) + delta_y
+            f["width"] = max_main_w
+            cur_stack_y += float(f["height"]) + layer_gap
+
+        main_bottom = cur_stack_y - layer_gap
+        main_start_x = float(main_frames[0]["x"])
+    else:
+        main_bottom = 0.0
+        main_start_x = 50.0
+        max_main_w = 1600.0
+
+    # Step 5: Side Columns Positioning
+    if side_frames:
+        side_x = main_start_x + max_main_w + 40.0
+        for f in side_frames:
+            fx = float(f["x"])
+            delta_x = side_x - fx
+            f["x"] = side_x
+            children = frame_shapes.get(f["id"], [])
+            for s in children:
+                s["x"] = float(s["x"]) + delta_x
+
+            children.sort(key=lambda s: float(s["y"]))
+            sc_y = float(f["y"]) + frame_padding + header_pad
+            for s in children:
+                s["y"] = sc_y
+                sc_y += float(s["height"]) + min_gap_y
+            f["height"] = max(main_bottom - float(f["y"]), sc_y + frame_padding - float(f["y"]))
+
+    # Step 6: Bottom Banner Positioning Below Main Stack and Side Columns
+    if banner_frames:
+        top_frames = main_frames + side_frames
+        total_bottom = max([float(f["y"]) + float(f["height"]) for f in top_frames] or [main_bottom])
+        cur_banner_y = total_bottom + layer_gap
+        total_w = max(float(f["x"]) + float(f["width"]) for f in top_frames) - main_start_x
+
+        for f in banner_frames:
+            fy = float(f["y"])
+            delta_y = cur_banner_y - fy
+            f["y"] = cur_banner_y
+            for s in frame_shapes.get(f["id"], []):
+                s["y"] = float(s["y"]) + delta_y
+            f["width"] = max(float(f["width"]), total_w)
+            cur_banner_y += float(f["height"]) + layer_gap
+
+    # Step 7: Unframed Floating Shapes De-Collision (if any)
+    if unframed_shapes:
+        unframed_shapes.sort(key=lambda s: (float(s["y"]), float(s["x"])))
+        for i in range(len(unframed_shapes)):
+            s1 = unframed_shapes[i]
+            x1_min, y1_min = float(s1["x"]), float(s1["y"])
+            x1_max, y1_max = x1_min + float(s1["width"]), y1_min + float(s1["height"])
+            for j in range(i + 1, len(unframed_shapes)):
+                s2 = unframed_shapes[j]
+                x2_min, y2_min = float(s2["x"]), float(s2["y"])
+                x2_max, y2_max = x2_min + float(s2["width"]), y2_min + float(s2["height"])
+                ix = max(0.0, min(x1_max, x2_max) - max(x1_min, x2_min))
+                iy = max(0.0, min(y1_max, y2_max) - max(y1_min, y2_min))
+                if ix > 0.5 and iy > 0.5:
+                    s2["x"] = float(s2["x"]) + ix + min_gap_x
+
+    # Step 8: Re-Center Bound Labels on Shapes
+    for s in shapes:
+        lbl = bound_labels.get(s["id"])
+        if lbl and s.get("customData", {}).get("type") not in ("code_block", "code-block"):
+            cx = float(s["x"]) + float(s["width"]) / 2.0
+            cy = float(s["y"]) + float(s["height"]) / 2.0
+            lbl["x"] = cx - float(lbl.get("width", 0.0)) / 2.0
+            lbl["y"] = cy - float(lbl.get("height", 0.0)) / 2.0
+
+    # Step 9: Recalculate Connector Endpoints via boundary_point()
+    for a in arrows:
+        sb = (a.get("startBinding") or {}).get("elementId")
+        eb = (a.get("endBinding") or {}).get("elementId")
+        if sb in element_index and eb in element_index:
+            s_el, t_el = element_index[sb], element_index[eb]
+            sn = {
+                "x": float(s_el.get("x", 0)),
+                "y": float(s_el.get("y", 0)),
+                "w": float(s_el.get("width", 0)),
+                "h": float(s_el.get("height", 0)),
+                "shape": s_el.get("type", "rectangle"),
+                "angle": float(s_el.get("angle", 0)),
+            }
+            tn = {
+                "x": float(t_el.get("x", 0)),
+                "y": float(t_el.get("y", 0)),
+                "w": float(t_el.get("width", 0)),
+                "h": float(t_el.get("height", 0)),
+                "shape": t_el.get("type", "rectangle"),
+                "angle": float(t_el.get("angle", 0)),
+            }
+            sp = boundary_point(sn, tn, 1)
+            ep = boundary_point(tn, sn, -1)
+            a["x"], a["y"] = sp[0], sp[1]
+            a["points"] = [[0.0, 0.0], [ep[0] - sp[0], ep[1] - sp[1]]]
+            a["width"] = abs(ep[0] - sp[0])
+            a["height"] = abs(ep[1] - sp[1])
+            arrow_lbl = bound_labels.get(a["id"])
+            if arrow_lbl:
+                arrow_lbl["x"] = sp[0] + (ep[0] - sp[0]) / 2.0 - float(arrow_lbl.get("width", 0)) / 2.0
+                arrow_lbl["y"] = sp[1] + (ep[1] - sp[1]) / 2.0 - float(arrow_lbl.get("height", 0)) / 2.0
+
+    return document_or_elements
+
+
+def architectural_layout(
+    tiers: list[dict[str, Any]],
+    edges: list[dict[str, Any]] | None = None,
+    start_x: float = 100.0,
+    start_y: float = 100.0,
+    tier_gap: float = 60.0,
+    node_gap: float = 40.0,
+    frame_padding: float = 35.0,
+    max_tier_width: float = 2400.0,
+):
+    """Generate a clean, collision-free multi-tier architectural layout.
+
+    Accepts structured tier definitions, pre-measures components, wraps rows gracefully,
+    creates containing frames for each architectural layer, and routes connectors.
+    """
+    edges = edges or []
+    frames = []
+    positioned_nodes = []
+    cur_y = start_y
+
+    all_measured = []
+    for tier in tiers:
+        t_nodes = tier.get("nodes", tier.get("components", []))
+        for n in t_nodes:
+            fs = n.get("fontSize") or n.get("font_size") or 20
+            ff = n.get("fontFamily") or n.get("font_family")
+            w, h = shape_dimensions(n.get("shape", "rectangle"), n.get("label", ""), font_size=fs, font_family=ff)
+            all_measured.append((n["id"], w, h))
+
+    node_sizes = {nid: (w, h) for nid, w, h in all_measured}
+
+    # Pass 2: Layout each tier horizontally with sub-row wrapping if needed
+    tier_widths = []
+    tier_data = []
+
+    for tier_idx, tier in enumerate(tiers):
+        t_nodes = tier.get("nodes", tier.get("components", []))
+        t_name = tier.get("name", f"Tier {tier_idx + 1}")
+        tier_id = tier.get("id", f"tier-{tier_idx + 1}")
+
+        rows = [[]]
+        cur_row_w = 0.0
+        for n in t_nodes:
+            w, h = node_sizes[n["id"]]
+            needed_w = w + (node_gap if rows[-1] else 0.0)
+            if rows[-1] and (cur_row_w + needed_w > max_tier_width):
+                rows.append([n])
+                cur_row_w = w
+            else:
+                rows[-1].append(n)
+                cur_row_w += needed_w
+
+        t_width = max(
+            sum(node_sizes[n["id"]][0] for n in r) + max(0, len(r) - 1) * node_gap
+            for r in rows
+        )
+        tier_widths.append(t_width)
+        tier_data.append((tier_id, t_name, rows, t_width))
+
+    max_layout_w = max(tier_widths) if tier_widths else 800.0
+
+    for tier_id, t_name, rows, t_w in tier_data:
+        frame_top = cur_y
+        row_y = frame_top + frame_padding + 25.0  # 25px header
+
+        tier_positioned = []
+        for r in rows:
+            r_w = sum(node_sizes[n["id"]][0] for n in r) + max(0, len(r) - 1) * node_gap
+            x_cursor = start_x + frame_padding + (max_layout_w - r_w) / 2.0
+            r_h = max(node_sizes[n["id"]][1] for n in r)
+            for n in r:
+                w, h = node_sizes[n["id"]]
+                fs = n.get("fontSize") or n.get("font_size") or 20
+                ff = n.get("fontFamily") or n.get("font_family")
+                tier_positioned.append(
+                    {
+                        **n,
+                        "frame_id": tier_id,
+                        "x": x_cursor,
+                        "y": row_y + (r_h - h) / 2.0,
+                        "w": w,
+                        "h": h,
+                        "label": wrap_text_to_shape(
+                            n.get("label", ""),
+                            shape=n.get("shape", "rectangle"),
+                            target_w=w,
+                            font_size=fs,
+                            font_family=ff,
+                        ),
+                    }
+                )
+                x_cursor += w + node_gap
+            row_y += r_h + node_gap
+
+        frame_bottom = row_y - node_gap + frame_padding
+        frame_h = frame_bottom - frame_top
+        frame_w = max_layout_w + 2 * frame_padding
+
+        frames.append(
+            {
+                "id": tier_id,
+                "name": t_name,
+                "x": start_x,
+                "y": frame_top,
+                "w": frame_w,
+                "h": frame_h,
+            }
+        )
+        positioned_nodes.extend(tier_positioned)
+        cur_y = frame_bottom + tier_gap
+
+    return {
+        "nodes": positioned_nodes,
+        "frames": frames,
+        "edges": edges,
+    }

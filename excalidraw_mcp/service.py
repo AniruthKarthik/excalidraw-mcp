@@ -1135,6 +1135,7 @@ class SceneService:
                 font_family=style.get("font_family"),
                 font_size=style.get("font_size"),
             )
+        self.resolve_layout()
         return {
             **result,
             "url": None,
@@ -1168,6 +1169,36 @@ class SceneService:
             return {"frame_id": frame_el["id"]}
 
         return self.state.apply(create_frame)
+
+    def resolve_layout(
+        self,
+        min_gap_x: float = 35.0,
+        min_gap_y: float = 40.0,
+        layer_gap: float = 50.0,
+        frame_padding: float = 30.0,
+    ):
+        """Automatically resolve all component overlaps, expand frames, and align layers."""
+        from .layout import resolve_scene_layout
+
+        def apply_resolve(document):
+            resolve_scene_layout(
+                document,
+                min_gap_x=min_gap_x,
+                min_gap_y=min_gap_y,
+                layer_gap=layer_gap,
+                frame_padding=frame_padding,
+            )
+            return {"status": "layout resolved", "revision": self.state.revision}
+
+        return self.state.apply(apply_resolve)
+
+    def check_geometry(self, min_gap: float = 30.0):
+        """Run geometric collision and frame containment diagnostics on current scene."""
+        from .layout import check_diagram_geometry
+
+        doc, revision = self.state.snapshot()
+        result = check_diagram_geometry(doc, min_gap=min_gap)
+        return {"revision": revision, **result}
 
     def find_elements(
         self,
@@ -1288,7 +1319,7 @@ class SceneService:
             "revision": revision,
         }
 
-    def batch_mutate(self, operations):
+    def batch_mutate(self, operations, auto_layout: bool = False):
         if not isinstance(operations, list) or not operations:
             raise SceneError("Operations must be a non-empty list")
         if len(operations) > 500:
@@ -2259,8 +2290,23 @@ class SceneService:
                         }
                     )
 
+                elif action == "resolve_layout":
+                    from .layout import resolve_scene_layout
+                    resolve_scene_layout(
+                        document,
+                        min_gap_x=op.get("min_gap_x", 35.0),
+                        min_gap_y=op.get("min_gap_y", 40.0),
+                        layer_gap=op.get("layer_gap", 50.0),
+                        frame_padding=op.get("frame_padding", 30.0),
+                    )
+                    results.append({"action": "resolve_layout", "status": "resolved"})
+
                 else:
                     raise SceneError(f"Unknown action '{action}' at operation {i}")
+
+            if auto_layout:
+                from .layout import resolve_scene_layout
+                resolve_scene_layout(document)
 
             return {
                 "status": "batch executed",

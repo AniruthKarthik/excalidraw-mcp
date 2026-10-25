@@ -257,21 +257,26 @@ def render_scene_image(
 
     min_x, min_y, max_x, max_y = _compute_bounds(elements)
 
+    # Adaptive outer margin for large architectures when default padding is used
+    if padding == 40 and (max_x - min_x > 1500 or max_y - min_y > 1500):
+        padding = max(40, min(140, int(0.03 * max(max_x - min_x, max_y - min_y))))
+
     world_w = max_x - min_x + 2 * padding
     world_h = max_y - min_y + 2 * padding
 
-    # Clamping scale so maximum dimensions don't exceed 4096 and diagram fits viewport
+    # Clamping scale so maximum dimensions don't exceed max_canvas_dim while preserving readability
+    max_canvas_dim = 8192.0 if scale > 1.0 else 4096.0
     effective_scale = min(
         scale,
-        4096.0 / max(1.0, world_w),
-        4096.0 / max(1.0, world_h),
+        max_canvas_dim / max(1.0, world_w),
+        max_canvas_dim / max(1.0, world_h),
     )
 
     target_w = world_w * effective_scale
     target_h = world_h * effective_scale
 
-    img_w = max(100, min(4096, int(round(target_w))))
-    img_h = max(100, min(4096, int(round(target_h))))
+    img_w = max(100, min(int(max_canvas_dim), int(round(target_w))))
+    img_h = max(100, min(int(max_canvas_dim), int(round(target_h))))
 
     offset_x = (img_w - target_w) / 2.0
     offset_y = (img_h - target_h) / 2.0
