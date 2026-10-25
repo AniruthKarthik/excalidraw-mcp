@@ -227,20 +227,34 @@ def render_scene_image(
 
     world_w = max_x - min_x + 2 * padding
     world_h = max_y - min_y + 2 * padding
-    img_w = max(100, min(4096, int(world_w * scale)))
-    img_h = max(100, min(4096, int(world_h * scale)))
+
+    # Clamping scale so maximum dimensions don't exceed 4096 and diagram fits viewport
+    effective_scale = min(
+        scale,
+        4096.0 / max(1.0, world_w),
+        4096.0 / max(1.0, world_h),
+    )
+
+    target_w = world_w * effective_scale
+    target_h = world_h * effective_scale
+
+    img_w = max(100, min(4096, int(round(target_w))))
+    img_h = max(100, min(4096, int(round(target_h))))
+
+    offset_x = (img_w - target_w) / 2.0
+    offset_y = (img_h - target_h) / 2.0
 
     image = Image.new("RGBA", (img_w, img_h), bg_color)
     draw = ImageDraw.Draw(image)
 
     def tx(wx: float) -> float:
-        return (wx - min_x + padding) * scale
+        return offset_x + (wx - min_x + padding) * effective_scale
 
     def ty(wy: float) -> float:
-        return (wy - min_y + padding) * scale
+        return offset_y + (wy - min_y + padding) * effective_scale
 
     if not elements:
-        font = get_font("sans-serif", int(18 * scale))
+        font = get_font("sans-serif", int(18 * effective_scale))
         draw.text(
             (img_w / 2, img_h / 2),
             "(Empty Excalidraw Canvas)",
@@ -270,6 +284,7 @@ def render_scene_image(
     shapes = []
     arrows = []
     texts = []
+    element_index = {el["id"]: el for el in elements if el.get("id")}
 
     for el in elements:
         etype = el.get("type")
@@ -287,8 +302,8 @@ def render_scene_image(
     for f in frames:
         fx = tx(f.get("x", 0))
         fy = ty(f.get("y", 0))
-        fw = f.get("width", 0) * scale
-        fh = f.get("height", 0) * scale
+        fw = f.get("width", 0) * effective_scale
+        fh = f.get("height", 0) * effective_scale
         frame_color = (180, 180, 190, 255)
 
         _draw_dashed_line(draw, (fx, fy), (fx + fw, fy), frame_color, width=2)
@@ -301,9 +316,9 @@ def render_scene_image(
         _draw_dashed_line(draw, (fx, fy + fh), (fx, fy), frame_color, width=2)
 
         name = f.get("name") or "Frame"
-        f_font = get_font("sans-serif", int(12 * scale), bold=True)
+        f_font = get_font("sans-serif", int(12 * effective_scale), bold=True)
         draw.text(
-            (fx + 6 * scale, fy + 4 * scale),
+            (fx + 6 * effective_scale, fy + 4 * effective_scale),
             name,
             fill=(110, 110, 120, 255),
             font=f_font,
@@ -313,21 +328,21 @@ def render_scene_image(
     for s in shapes:
         sx = tx(s.get("x", 0))
         sy = ty(s.get("y", 0))
-        sw = s.get("width", 0) * scale
-        sh = s.get("height", 0) * scale
+        sw = s.get("width", 0) * effective_scale
+        sh = s.get("height", 0) * effective_scale
         stype = s.get("type")
 
         custom_data = s.get("customData") or {}
 
         # Specialized rendering for Code Blocks
         if custom_data.get("type") in ("code_block", "code-block"):
-            _render_code_block(draw, s, sx, sy, sw, sh, scale)
+            _render_code_block(draw, s, sx, sy, sw, sh, effective_scale)
             continue
 
         opacity = s.get("opacity", 100)
         stroke_color = _parse_color(s.get("strokeColor", "#1e1e1e"), opacity)
         bg_fill = _parse_color(s.get("backgroundColor", "transparent"), opacity)
-        stroke_w = max(1, int(s.get("strokeWidth", 1) * scale))
+        stroke_w = max(1, int(s.get("strokeWidth", 1) * effective_scale))
 
         if stype == "rectangle":
             roundness = s.get("roundness")
@@ -336,11 +351,11 @@ def render_scene_image(
                 rtype = roundness.get("type")
                 if rtype == 3:  # adaptive
                     radius = max(
-                        4, min(int(min(sw, sh) * 0.15), int(32 * scale))
+                        4, min(int(min(sw, sh) * 0.15), int(32 * effective_scale))
                     )
                 elif rtype == 2:  # round
                     radius = max(
-                        8, min(int(min(sw, sh) * 0.25), int(48 * scale))
+                        8, min(int(min(sw, sh) * 0.25), int(48 * effective_scale))
                     )
 
             fill_val = bg_fill if bg_fill[3] > 0 else None
@@ -407,7 +422,7 @@ def render_scene_image(
         points = a.get("points") or [[0.0, 0.0], [50.0, 50.0]]
         opacity = a.get("opacity", 100)
         stroke_color = _parse_color(a.get("strokeColor", "#1e1e1e"), opacity)
-        stroke_w = max(1, int(a.get("strokeWidth", 2) * scale))
+        stroke_w = max(1, int(a.get("strokeWidth", 2) * effective_scale))
 
         screen_pts = [(tx(ax + pt[0]), ty(ay + pt[1])) for pt in points]
         if len(screen_pts) >= 2:
@@ -421,7 +436,7 @@ def render_scene_image(
                     screen_pts[-1],
                     screen_pts[-2],
                     stroke_color,
-                    size=max(10.0, 14.0 * scale),
+                    size=max(10.0, 14.0 * effective_scale),
                 )
             # Arrowhead at start
             if a.get("startArrowhead") == "arrow":
@@ -430,7 +445,7 @@ def render_scene_image(
                     screen_pts[0],
                     screen_pts[1],
                     stroke_color,
-                    size=max(10.0, 14.0 * scale),
+                    size=max(10.0, 14.0 * effective_scale),
                 )
 
     # 4. Render Text & Labels
@@ -438,22 +453,74 @@ def render_scene_image(
         text_content = t.get("text", "")
         if not text_content:
             continue
-        px = tx(t.get("x", 0))
-        py = ty(t.get("y", 0))
-        font_size = int(t.get("fontSize", 20) * scale)
+        font_size = int(t.get("fontSize", 20) * effective_scale)
         font_fam = t.get("customData", {}).get("fontFamily") or t.get("fontFamily")
         font = get_font(font_fam, font_size)
         opacity = t.get("opacity", 100)
         stroke_color = _parse_color(t.get("strokeColor", "#1e1e1e"), opacity)
         text_align = t.get("textAlign", "left")
 
-        draw.text(
-            (px, py),
-            text_content,
-            fill=stroke_color,
-            font=font,
-            align=text_align,
-        )
+        container_id = t.get("containerId")
+        container = element_index.get(container_id) if container_id else None
+
+        if container:
+            ctype = container.get("type")
+            if ctype in ("rectangle", "diamond", "ellipse", "frame"):
+                cx = float(container.get("x", 0.0)) + float(container.get("width", 0.0)) / 2.0
+                cy = float(container.get("y", 0.0)) + float(container.get("height", 0.0)) / 2.0
+                scx = tx(cx)
+                scy = ty(cy)
+                draw.text(
+                    (scx, scy),
+                    text_content,
+                    fill=stroke_color,
+                    font=font,
+                    anchor="mm",
+                    align="center",
+                )
+            elif ctype in ("arrow", "line"):
+                pts = container.get("points") or [
+                    [0.0, 0.0],
+                    [float(container.get("width", 0.0)), float(container.get("height", 0.0))],
+                ]
+                if len(pts) >= 2:
+                    p0 = pts[0]
+                    p1 = pts[-1]
+                    cx = float(container.get("x", 0.0)) + (float(p0[0]) + float(p1[0])) / 2.0
+                    cy = float(container.get("y", 0.0)) + (float(p0[1]) + float(p1[1])) / 2.0
+                else:
+                    cx = float(container.get("x", 0.0))
+                    cy = float(container.get("y", 0.0))
+                scx = tx(cx)
+                scy = ty(cy)
+                draw.text(
+                    (scx, scy),
+                    text_content,
+                    fill=stroke_color,
+                    font=font,
+                    anchor="mm",
+                    align="center",
+                )
+            else:
+                px = tx(t.get("x", 0))
+                py = ty(t.get("y", 0))
+                draw.text(
+                    (px, py),
+                    text_content,
+                    fill=stroke_color,
+                    font=font,
+                    align=text_align,
+                )
+        else:
+            px = tx(t.get("x", 0))
+            py = ty(t.get("y", 0))
+            draw.text(
+                (px, py),
+                text_content,
+                fill=stroke_color,
+                font=font,
+                align=text_align,
+            )
 
     # Save to buffer and return bytes and dimensions
     output = io.BytesIO()

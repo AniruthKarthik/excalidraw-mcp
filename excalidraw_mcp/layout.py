@@ -101,13 +101,31 @@ def layered_layout(
             )
             + rank_gap
         )
+    cross_dim = 1 if direction == "horizontal" else 0
+    rank_cross_spans = {}
+    for level in sorted(groups):
+        level_nodes = groups[level]
+        total_span = (
+            sum(sizes[n["id"]][cross_dim] for n in level_nodes)
+            + max(0, len(level_nodes) - 1) * node_gap
+        )
+        rank_cross_spans[level] = total_span
+
+    max_cross_span = max(rank_cross_spans.values()) if rank_cross_spans else 0
+
     positioned = []
     for level in sorted(groups):
-        cross = 0
+        cross = (max_cross_span - rank_cross_spans[level]) / 2.0
+        rank_primary_max = max(
+            sizes[n["id"]][0 if direction == "horizontal" else 1]
+            for n in groups[level]
+        )
         for node in groups[level]:
             width, height = sizes[node["id"]]
-            x = start_x + (offsets[level] if direction == "horizontal" else cross)
-            y = start_y + (cross if direction == "horizontal" else offsets[level])
+            node_primary = width if direction == "horizontal" else height
+            primary_offset = offsets[level] + (rank_primary_max - node_primary) / 2.0
+            x = start_x + (primary_offset if direction == "horizontal" else cross)
+            y = start_y + (cross if direction == "horizontal" else primary_offset)
             positioned.append(
                 {
                     **node,
