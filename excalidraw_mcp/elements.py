@@ -157,6 +157,10 @@ def text(
     ):
         custom_data["fontFamily"] = ff.strip()
 
+    lines = content.split("\n")
+    text_w = max(map(len, lines)) * fs * 0.6 if lines else 20.0
+    text_h = len(lines) * fs * 1.25 if lines else float(fs) * 1.25
+
     el = {
         "id": str(uuid.uuid4()),
         "type": "text",
@@ -164,8 +168,8 @@ def text(
         "y": y,
         "text": content,
         "fontSize": fs,
-        "width": max(map(len, content.split("\n"))) * fs * 0.6,
-        "height": len(content.split("\n")) * fs * 1.25,
+        "width": text_w,
+        "height": text_h,
         "fontFamily": norm_ff,
         "lineHeight": 1.25,
         "textAlign": "left",

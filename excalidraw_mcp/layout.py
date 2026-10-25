@@ -17,15 +17,85 @@ def wrap_label(label: str, max_chars: int = 24) -> str:
     return "\n".join(lines)
 
 
-def shape_dimensions(shape: str, label: str):
-    lines = wrap_label(label).splitlines() or [""]
-    text_width, text_height = max(map(len, lines)) * 12, len(lines) * 25
+def wrap_text_to_shape(
+    label: str,
+    shape: str = "rectangle",
+    target_w: float | None = None,
+    font_size: int = 20,
+    font_family: str | int | None = None,
+) -> str:
+    """Intelligently wrap label text to fit within a shape's inscribed geometry."""
+    if not label:
+        return ""
+    font_size = font_size or 20
+    if target_w is not None and target_w > 0:
+        if shape == "ellipse":
+            # Inscribed rectangle inside ellipse: width * (1 / sqrt(2)) ~ 0.707 * width
+            safe_w = max(60.0, (target_w * 0.707) - 32.0)
+        elif shape == "diamond":
+            # Inscribed rhombus: safe width at ~middle height is ~0.55 * width
+            safe_w = max(60.0, (target_w * 0.55) - 32.0)
+        else:
+            # Rectangle: width minus horizontal padding (20px each side)
+            safe_w = max(60.0, target_w - 40.0)
+    else:
+        if shape == "ellipse":
+            safe_w = 140.0
+        elif shape == "diamond":
+            safe_w = 130.0
+        else:
+            safe_w = 180.0
+
+    from .fonts import get_font
+    try:
+        font = get_font(font_family, font_size)
+        bbox = font.getbbox("M")
+        char_w = max(7.0, float(bbox[2] - bbox[0]) * 0.85)
+    except Exception:
+        char_w = max(7.0, float(font_size) * 0.55)
+
+    max_chars = max(20, int(safe_w / char_w))
+    return wrap_label(label, max_chars=max_chars)
+
+
+def shape_dimensions(
+    shape: str,
+    label: str,
+    font_size: int = 20,
+    font_family: str | int | None = None,
+) -> tuple[float, float]:
+    """Calculate the bounding box dimensions of a shape required to enclose its text.
+
+    Guarantees that all text lines fit inside with consistent internal padding,
+    accounting for geometric boundaries of rectangles, ellipses, and diamonds.
+    """
+    from .fonts import measure_text_dimensions
+
+    font_size = font_size or 20
+    # Auto-wrap label according to shape geometry
+    wrapped = wrap_text_to_shape(
+        label, shape=shape, font_size=font_size, font_family=font_family
+    )
+    text_w, text_h, _ = measure_text_dimensions(
+        wrapped, font_family=font_family, font_size=font_size
+    )
+
     if shape == "ellipse":
-        size = max(140, text_width + 70, text_height + 70)
+        # For a circle/ellipse, diameter >= hypot(text_w, text_h) + 2 * padding
+        diag = math.hypot(text_w, text_h)
+        size = max(140.0, diag + 48.0)
         return size, size
+
     if shape == "diamond":
-        return max(180, text_width + 100), max(130, text_height + 70)
-    return max(180, text_width + 60), max(100, text_height + 50)
+        # For a diamond (rhombus), corner fits inside: W_t/W + H_t/H <= 1.0
+        min_w = text_w * 1.65 + 60.0
+        min_h = text_h * 1.65 + 50.0
+        return max(180.0, min_w), max(130.0, min_h)
+
+    # Rectangle: text width + padding on left/right, text height + padding on top/bottom
+    min_w = text_w + 48.0
+    min_h = text_h + 36.0
+    return max(180.0, min_w), max(100.0, min_h)
 
 
 def linear_layout(nodes, direction="horizontal", start_x=100, start_y=100, gap=100):
@@ -33,7 +103,15 @@ def linear_layout(nodes, direction="horizontal", start_x=100, start_y=100, gap=1
         raise SceneError("Layout direction must be horizontal or vertical")
     if not nodes:
         return []
-    dims = [shape_dimensions(n["shape"], n["label"]) for n in nodes]
+    dims = [
+        shape_dimensions(
+            n["shape"],
+            n["label"],
+            font_size=n.get("fontSize") or n.get("font_size") or 20,
+            font_family=n.get("fontFamily") or n.get("font_family"),
+        )
+        for n in nodes
+    ]
     max_cross = (
         max(h for w, h in dims) if direction == "horizontal" else max(w for w, h in dims)
     )
@@ -48,9 +126,17 @@ def linear_layout(nodes, direction="horizontal", start_x=100, start_y=100, gap=1
             x = start_x + (max_cross - width) / 2.0
             y = start_y + cursor
             cursor += height + gap
+        fs = node.get("fontSize") or node.get("font_size") or 20
+        ff = node.get("fontFamily") or node.get("font_family")
         item = {
             **node,
-            "label": wrap_label(node["label"]),
+            "label": wrap_text_to_shape(
+                node["label"],
+                shape=node["shape"],
+                target_w=width,
+                font_size=fs,
+                font_family=ff,
+            ),
             "x": x,
             "y": y,
             "w": width,
@@ -72,7 +158,15 @@ def grid_layout(
     """Layout nodes in a multi-row grid with snake routing for balanced aspect ratios."""
     if not nodes:
         return []
-    dims = [shape_dimensions(n["shape"], n["label"]) for n in nodes]
+    dims = [
+        shape_dimensions(
+            n["shape"],
+            n["label"],
+            font_size=n.get("fontSize") or n.get("font_size") or 20,
+            font_family=n.get("fontFamily") or n.get("font_family"),
+        )
+        for n in nodes
+    ]
     cell_w = max(w for w, h in dims) + col_gap
     cell_h = max(h for w, h in dims) + row_gap
 
@@ -88,10 +182,18 @@ def grid_layout(
         w, h = dims[i]
         x = start_x + col * cell_w + (cell_w - col_gap - w) / 2.0
         y = start_y + row * cell_h + (cell_h - row_gap - h) / 2.0
+        fs = node.get("fontSize") or node.get("font_size") or 20
+        ff = node.get("fontFamily") or node.get("font_family")
         positioned.append(
             {
                 **node,
-                "label": wrap_label(node["label"]),
+                "label": wrap_text_to_shape(
+                    node["label"],
+                    shape=node["shape"],
+                    target_w=w,
+                    font_size=fs,
+                    font_family=ff,
+                ),
                 "x": x,
                 "y": y,
                 "w": w,
@@ -141,7 +243,12 @@ def layered_layout(
     for node_id in ids:
         groups[rank.get(node_id, 0)].append(lookup[node_id])
     sizes = {
-        node_id: shape_dimensions(lookup[node_id]["shape"], lookup[node_id]["label"])
+        node_id: shape_dimensions(
+            lookup[node_id]["shape"],
+            lookup[node_id]["label"],
+            font_size=lookup[node_id].get("fontSize") or lookup[node_id].get("font_size") or 20,
+            font_family=lookup[node_id].get("fontFamily") or lookup[node_id].get("font_family"),
+        )
         for node_id in ids
     }
 
@@ -213,10 +320,18 @@ def layered_layout(
             primary_offset = offsets[level] + (rank_primary_max - node_primary) / 2.0
             x = start_x + (primary_offset if direction == "horizontal" else cross)
             y = start_y + (cross if direction == "horizontal" else primary_offset)
+            fs = node.get("fontSize") or node.get("font_size") or 20
+            ff = node.get("fontFamily") or node.get("font_family")
             positioned.append(
                 {
                     **node,
-                    "label": wrap_label(node["label"]),
+                    "label": wrap_text_to_shape(
+                        node["label"],
+                        shape=node["shape"],
+                        target_w=width,
+                        font_size=fs,
+                        font_family=ff,
+                    ),
                     "x": x,
                     "y": y,
                     "w": width,

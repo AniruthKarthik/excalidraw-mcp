@@ -37,11 +37,39 @@ def _serialize_for_export(document):
 
 
 def _shape_elements(shape, x, y, w, h, label, style, frame_id=None):
-    shape_el = SHAPES[shape](x, y, w, h, **style)
-    if frame_id:
-        shape_el["frameId"] = frame_id
-    elements = [shape_el]
     if label:
+        font_size = style.get("font_size", style.get("fontSize", 20))
+        font_family = style.get("font_family", style.get("fontFamily"))
+        from .layout import wrap_text_to_shape
+        from .fonts import measure_text_dimensions
+
+        # Wrap text to target container width
+        wrapped_label = wrap_text_to_shape(
+            label, shape=shape, target_w=w, font_size=font_size, font_family=font_family
+        )
+        text_w, text_h, _ = measure_text_dimensions(
+            wrapped_label, font_family=font_family, font_size=font_size
+        )
+
+        # Calculate minimum required shape dimensions for internal padding containment
+        if shape == "ellipse":
+            min_size = math.hypot(text_w, text_h) + 40.0
+            min_w, min_h = min_size, min_size
+        elif shape == "diamond":
+            min_w = text_w * 1.6 + 48.0
+            min_h = text_h * 1.6 + 40.0
+        else:
+            min_w = text_w + 36.0
+            min_h = text_h + 28.0
+
+        # Auto-expand container if requested size is too small for text
+        if min_w > w or min_h > h:
+            w = max(w, min_w)
+            h = max(h, min_h)
+
+        shape_el = SHAPES[shape](x, y, w, h, **style)
+        if frame_id:
+            shape_el["frameId"] = frame_id
         label_style = {
             k: v
             for k, v in style.items()
@@ -54,13 +82,17 @@ def _shape_elements(shape, x, y, w, h, label, style, frame_id=None):
                 "font_size",
             )
         }
-        label_el = text(x, y, label, **label_style)
+        label_el = text(x, y, wrapped_label, **label_style)
         if frame_id:
             label_el["frameId"] = frame_id
         bind_text(label_el, shape_el)
         _center_label(label_el, shape_el)
-        elements.append(label_el)
-    return elements
+        return [shape_el, label_el]
+    else:
+        shape_el = SHAPES[shape](x, y, w, h, **style)
+        if frame_id:
+            shape_el["frameId"] = frame_id
+        return [shape_el]
 
 
 def _active(document):
@@ -514,11 +546,7 @@ class SceneService:
                         el["customData"]["fontFamily"] = str(font_family)
                 if font_size is not None:
                     el["fontSize"] = font_size
-                    lines = el["text"].split("\n")
-                    el["width"] = max(map(len, lines)) * el["fontSize"] * 0.6
-                    el["height"] = len(lines) * el["fontSize"] * el.get("lineHeight", 1.25)
-                    if container:
-                        _center_label(el, container)
+
                 if label is not None:
                     if not label:
                         if container is None:
@@ -537,17 +565,61 @@ class SceneService:
                             "label_id": None,
                         }
                     else:
+                        active_label = label
+                else:
+                    active_label = el.get("text", "")
+
+                from .fonts import measure_text_dimensions
+                from .layout import wrap_text_to_shape
+
+                if container and container.get("type") in ("rectangle", "ellipse", "diamond"):
+                    c_type = container["type"]
+                    c_w = float(container.get("width", 100.0))
+                    c_h = float(container.get("height", 100.0))
+                    wrapped = wrap_text_to_shape(
+                        active_label,
+                        shape=c_type,
+                        target_w=c_w,
+                        font_size=el.get("fontSize", 20),
+                        font_family=el.get("fontFamily"),
+                    )
+                    el["text"] = el["originalText"] = wrapped
+                    tw, th, _ = measure_text_dimensions(
+                        wrapped, font_family=el.get("fontFamily"), font_size=el.get("fontSize", 20)
+                    )
+                    el["width"] = tw
+                    el["height"] = th
+
+                    if c_type == "ellipse":
+                        min_size = math.hypot(tw, th) + 40.0
+                        min_w, min_h = min_size, min_size
+                    elif c_type == "diamond":
+                        min_w = tw * 1.6 + 48.0
+                        min_h = th * 1.6 + 40.0
+                    else:
+                        min_w = tw + 36.0
+                        min_h = th + 28.0
+
+                    if min_w > c_w or min_h > c_h:
+                        new_w = max(c_w, min_w)
+                        new_h = max(c_h, min_h)
+                        container["x"] = (container["x"] + c_w / 2.0) - new_w / 2.0
+                        container["y"] = (container["y"] + c_h / 2.0) - new_h / 2.0
+                        container["width"] = new_w
+                        container["height"] = new_h
+
+                    _center_label(el, container)
+                else:
+                    if label is not None:
                         el["text"] = el["originalText"] = label
-                        el["width"] = (
-                            max(map(len, label.split("\n"))) * el["fontSize"] * 0.6
-                        )
-                        el["height"] = (
-                            len(label.split("\n"))
-                            * el["fontSize"]
-                            * el["lineHeight"]
-                        )
-                        if container:
-                            _center_label(el, container)
+                    tw, th, _ = measure_text_dimensions(
+                        el["text"], font_family=el.get("fontFamily"), font_size=el.get("fontSize", 20)
+                    )
+                    el["width"] = tw
+                    el["height"] = th
+                    if container:
+                        _center_label(el, container)
+
                 el.update(updates)
                 return {
                     "status": "updated",
@@ -557,6 +629,9 @@ class SceneService:
             else:
                 target = _label_for(index, element_id)
                 label_id = target.get("id") if target else None
+                from .fonts import measure_text_dimensions
+                from .layout import wrap_text_to_shape
+
                 if label is not None:
                     if target is None:
                         if label:
@@ -567,12 +642,44 @@ class SceneService:
                                 "opacity": updates.get("opacity", el.get("opacity", 100)),
                             }
                             f_size = font_size if font_size is not None else (14 if el["type"] == "arrow" else 20)
+                            f_fam = font_family or 2
+                            c_type = el["type"]
+                            c_w = float(el.get("width", 100.0))
+                            c_h = float(el.get("height", 100.0))
+
+                            if c_type in ("rectangle", "ellipse", "diamond"):
+                                wrapped = wrap_text_to_shape(
+                                    label, shape=c_type, target_w=c_w, font_size=f_size, font_family=f_fam
+                                )
+                                tw, th, _ = measure_text_dimensions(
+                                    wrapped, font_family=f_fam, font_size=f_size
+                                )
+                                if c_type == "ellipse":
+                                    min_size = math.hypot(tw, th) + 40.0
+                                    min_w, min_h = min_size, min_size
+                                elif c_type == "diamond":
+                                    min_w = tw * 1.6 + 48.0
+                                    min_h = th * 1.6 + 40.0
+                                else:
+                                    min_w = tw + 36.0
+                                    min_h = th + 28.0
+
+                                if min_w > c_w or min_h > c_h:
+                                    new_w = max(c_w, min_w)
+                                    new_h = max(c_h, min_h)
+                                    el["x"] = (el["x"] + c_w / 2.0) - new_w / 2.0
+                                    el["y"] = (el["y"] + c_h / 2.0) - new_h / 2.0
+                                    el["width"] = new_w
+                                    el["height"] = new_h
+                            else:
+                                wrapped = label
+
                             target = text(
                                 el["x"],
                                 el["y"],
-                                label,
+                                wrapped,
                                 fontSize=f_size,
-                                fontFamily=font_family or 2,
+                                fontFamily=f_fam,
                                 **label_style,
                             )
                             if el.get("frameId"):
@@ -592,28 +699,101 @@ class SceneService:
                         label_id = None
                         target = None
                     else:
-                        target["text"] = target["originalText"] = label
+                        c_type = el["type"]
+                        c_w = float(el.get("width", 100.0))
+                        c_h = float(el.get("height", 100.0))
+                        f_size = font_size if font_size is not None else target.get("fontSize", 20)
+                        f_fam = font_family if font_family is not None else target.get("fontFamily")
+
                         if font_size is not None:
                             target["fontSize"] = font_size
                         if font_family is not None:
                             target["fontFamily"] = normalize_font_family(font_family)
-                        target["width"] = (
-                            max(map(len, label.split("\n"))) * target["fontSize"] * 0.6
-                        )
-                        target["height"] = (
-                            len(label.split("\n"))
-                            * target["fontSize"]
-                            * target["lineHeight"]
-                        )
+
+                        if c_type in ("rectangle", "ellipse", "diamond"):
+                            wrapped = wrap_text_to_shape(
+                                label, shape=c_type, target_w=c_w, font_size=f_size, font_family=f_fam
+                            )
+                            target["text"] = target["originalText"] = wrapped
+                            tw, th, _ = measure_text_dimensions(
+                                wrapped, font_family=target.get("fontFamily"), font_size=target.get("fontSize", 20)
+                            )
+                            target["width"] = tw
+                            target["height"] = th
+
+                            if c_type == "ellipse":
+                                min_size = math.hypot(tw, th) + 40.0
+                                min_w, min_h = min_size, min_size
+                            elif c_type == "diamond":
+                                min_w = tw * 1.6 + 48.0
+                                min_h = th * 1.6 + 40.0
+                            else:
+                                min_w = tw + 36.0
+                                min_h = th + 28.0
+
+                            if min_w > c_w or min_h > c_h:
+                                new_w = max(c_w, min_w)
+                                new_h = max(c_h, min_h)
+                                el["x"] = (el["x"] + c_w / 2.0) - new_w / 2.0
+                                el["y"] = (el["y"] + c_h / 2.0) - new_h / 2.0
+                                el["width"] = new_w
+                                el["height"] = new_h
+                        else:
+                            target["text"] = target["originalText"] = label
+                            tw, th, _ = measure_text_dimensions(
+                                label, font_family=target.get("fontFamily"), font_size=target.get("fontSize", 20)
+                            )
+                            target["width"] = tw
+                            target["height"] = th
+
                         _center_label(target, el)
                 elif target is not None:
                     if font_size is not None:
                         target["fontSize"] = font_size
                     if font_family is not None:
                         target["fontFamily"] = normalize_font_family(font_family)
-                    lines = target["text"].split("\n")
-                    target["width"] = max(map(len, lines)) * target["fontSize"] * 0.6
-                    target["height"] = len(lines) * target["fontSize"] * target.get("lineHeight", 1.25)
+
+                    c_type = el.get("type", "rectangle")
+                    c_w = float(el.get("width", 100.0))
+                    c_h = float(el.get("height", 100.0))
+                    if c_type in ("rectangle", "ellipse", "diamond"):
+                        wrapped = wrap_text_to_shape(
+                            target.get("originalText", target["text"]),
+                            shape=c_type,
+                            target_w=c_w,
+                            font_size=target.get("fontSize", 20),
+                            font_family=target.get("fontFamily"),
+                        )
+                        target["text"] = wrapped
+                        tw, th, _ = measure_text_dimensions(
+                            wrapped, font_family=target.get("fontFamily"), font_size=target.get("fontSize", 20)
+                        )
+                        target["width"] = tw
+                        target["height"] = th
+                        if c_type == "ellipse":
+                            min_size = math.hypot(tw, th) + 40.0
+                            min_w, min_h = min_size, min_size
+                        elif c_type == "diamond":
+                            min_w = tw * 1.6 + 48.0
+                            min_h = th * 1.6 + 40.0
+                        else:
+                            min_w = tw + 36.0
+                            min_h = th + 28.0
+
+                        if min_w > c_w or min_h > c_h:
+                            new_w = max(c_w, min_w)
+                            new_h = max(c_h, min_h)
+                            el["x"] = (el["x"] + c_w / 2.0) - new_w / 2.0
+                            el["y"] = (el["y"] + c_h / 2.0) - new_h / 2.0
+                            el["width"] = new_w
+                            el["height"] = new_h
+                    else:
+                        tw, th, _ = measure_text_dimensions(
+                            target["text"], font_family=target.get("fontFamily"), font_size=target.get("fontSize", 20)
+                        )
+                        target["width"] = tw
+                        target["height"] = th
+
                     _center_label(target, el)
                 el.update(updates)
                 return {

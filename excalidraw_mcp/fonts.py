@@ -406,3 +406,35 @@ def get_font(
 def list_fonts(category: str | None = None) -> list[dict[str, str]]:
     """List all fonts discovered in the environment."""
     return registry.list_fonts(category=category)
+
+
+def measure_text_dimensions(
+    text_content: str,
+    font_family: str | int | None = None,
+    font_size: int = 20,
+    line_height_mul: float = 1.25,
+) -> tuple[float, float, list[float]]:
+    """Accurately measure multiline text dimensions using actual font metrics.
+
+    Returns:
+        (max_line_width, total_height, line_widths)
+    """
+    if not text_content:
+        return 0.0, float(font_size) * line_height_mul, [0.0]
+    font = get_font(font_family, font_size)
+    lines = text_content.splitlines() or [""]
+    line_widths = []
+    for line in lines:
+        if not line:
+            line_widths.append(0.0)
+            continue
+        try:
+            bbox = font.getbbox(line)
+            w = float(bbox[2] - bbox[0])
+        except Exception:
+            w = float(len(line)) * float(font_size) * 0.6
+        line_widths.append(w)
+    max_w = max(line_widths) if line_widths else 0.0
+    line_h = float(font_size) * line_height_mul
+    total_h = max(line_h, len(lines) * line_h)
+    return max_w, total_h, line_widths
