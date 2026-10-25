@@ -130,6 +130,7 @@ def text(
 ):
     content = content.replace("\r\n", "\n").replace("\r", "\n")
     ff = style.pop("font_family", style.pop("fontFamily", fontFamily))
+    fs = style.pop("font_size", style.pop("fontSize", fontSize))
     norm_ff = normalize_font_family(ff)
     custom_data = style.pop("customData", {}) or {}
     if isinstance(ff, str) and ff.strip().lower() not in (
@@ -162,9 +163,9 @@ def text(
         "x": x,
         "y": y,
         "text": content,
-        "fontSize": fontSize,
-        "width": max(map(len, content.split("\n"))) * fontSize * 0.6,
-        "height": len(content.split("\n")) * fontSize * 1.25,
+        "fontSize": fs,
+        "width": max(map(len, content.split("\n"))) * fs * 0.6,
+        "height": len(content.split("\n")) * fs * 1.25,
         "fontFamily": norm_ff,
         "lineHeight": 1.25,
         "textAlign": "left",

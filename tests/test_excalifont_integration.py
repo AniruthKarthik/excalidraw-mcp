@@ -63,6 +63,15 @@ class TestFontRegistryAndExcalifontDiscovery:
         bbox = font.getbbox("Hello")
         assert bbox[2] > bbox[0]
 
+    def test_latin_glyph_support_filter(self):
+        # sans-serif should select a font with valid Latin glyphs (not Droid Sans Ethiopic or other non-Latin fonts)
+        font = get_font("sans-serif", 20)
+        assert font is not None
+        # Verify masks for 'A' and '?' are distinct (not falling back to ? for English letters)
+        mask_a = list(font.getmask("A"))
+        mask_q = list(font.getmask("?"))
+        assert mask_a != mask_q
+
     def test_fallback_when_bundled_font_missing(self, tmp_path):
         # Empty registry with no fonts found should fall back to Pillow default
         empty_reg = FontRegistry()
@@ -195,6 +204,51 @@ class TestSceneServiceExcalifontOperations:
         names = [f["family"] for f in fonts_res["fonts"]]
         assert "Excalifont" in names
 
+    def test_draw_graph_with_excalifont(self):
+        service = SceneService()
+        nodes = [
+            {"id": "n1", "label": "Node 1", "font_family": "excalifont", "font_size": 22},
+            {"id": "n2", "label": "Node 2"},
+        ]
+        edges = [
+            {"id": "e1", "source": "n1", "target": "n2", "label": "Flows", "font_family": "excalifont"},
+        ]
+        res = service.draw_graph(nodes, edges, font_family="excalifont")
+        assert res["status"] == "graph drawn"
+        doc = service.state.document()
+        texts = [el for el in doc["elements"] if el["type"] == "text"]
+        assert len(texts) == 3  # 2 node labels + 1 edge label
+        for t in texts:
+            assert t["fontFamily"] == 1  # All configured with Excalifont
+
+    def test_draw_architecture_with_excalifont(self):
+        service = SceneService()
+        res = service.draw_architecture("box: Client, box: Server", font_family="excalifont")
+        assert res["status"] == "graph drawn"
+        doc = service.state.document()
+        node_texts = [el for el in doc["elements"] if el["type"] == "text"]
+        assert len(node_texts) >= 2
+        for t in node_texts:
+            assert t["fontFamily"] == 1
+
+    def test_add_shapes_and_connect_with_font_properties(self):
+        service = SceneService()
+        r = service.add_shape("rectangle", 0, 0, 100, 50, label="Box", font_family="excalifont", font_size=18)
+        c = service.add_shape("ellipse", 200, 0, 50, 50, label="Circle", font_family="excalifont", font_size=16)
+        conn = service.connect(r["rectangle_id"], c["circle_id"], label="Links", font_family="excalifont", font_size=14)
+        
+        lbl_r = service.get_element(r["label_id"])["element"]
+        assert lbl_r["fontFamily"] == 1
+        assert lbl_r["fontSize"] == 18
+
+        lbl_c = service.get_element(c["label_id"])["element"]
+        assert lbl_c["fontFamily"] == 1
+        assert lbl_c["fontSize"] == 16
+
+        lbl_conn = service.get_element(conn["label_id"])["element"]
+        assert lbl_conn["fontFamily"] == 1
+        assert lbl_conn["fontSize"] == 14
+
 
 class TestRenderingAndExportCompatibility:
     def test_render_png_with_excalifont(self):
@@ -252,6 +306,18 @@ class TestMcpServerExcalifontToolCalls:
         schema = tools["update_element"].parameters
         assert "font_family" in schema.get("properties", {})
         assert "font_size" in schema.get("properties", {})
+
+    def test_mcp_server_draw_graph_tool_font_properties(self):
+        server = create_server()
+        tools = {t.name: t for t in asyncio.run(server.list_tools())}
+        assert "draw_graph" in tools
+        schema = tools["draw_graph"].parameters
+        assert "font_family" in schema.get("properties", {})
+        assert "font_size" in schema.get("properties", {})
+        # Node properties also accept font_family
+        node_props = schema["properties"]["nodes"]["items"]["properties"]
+        assert "font_family" in node_props
+        assert "font_size" in node_props
 
     @pytest.mark.anyio
     async def test_mcp_client_tool_call_creates_excalifont_text(self):

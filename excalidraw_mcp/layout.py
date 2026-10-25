@@ -8,8 +8,9 @@ from excalidraw_mcp.errors import SceneError
 
 
 def wrap_label(label: str, max_chars: int = 24) -> str:
+    cleaned = label.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
     lines = []
-    for paragraph in label.splitlines() or [""]:
+    for paragraph in cleaned.splitlines() or [""]:
         lines.extend(
             textwrap.wrap(paragraph, width=max_chars, break_long_words=True) or [""]
         )

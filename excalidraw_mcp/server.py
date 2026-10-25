@@ -1,7 +1,7 @@
 """MCP adapters; each server owns an explicit scene service."""
 
 from hashlib import sha256
-from typing import Literal
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -94,6 +94,8 @@ def _style_kwargs(
     opacity: int | None = None,
     roughness: int | None = None,
     roundness: str | None = None,
+    font_family: Any = None,
+    font_size: int | None = None,
 ) -> dict:
     """Collect non-None style keyword arguments into a dict."""
     return {k: v for k, v in locals().items() if v is not None}
@@ -117,6 +119,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         h: Dimension,
         label: Label = "",
         roundness: Roundness | None = None,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
@@ -139,6 +143,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             opacity=opacity,
             roughness=roughness,
             roundness=roundness,
+            font_family=font_family,
+            font_size=font_size,
         )
         return invoke(
             service.add_shape, "rectangle", x, y, w, h, label, frame_id=frame_id, **style
@@ -150,6 +156,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         y: Coordinate,
         size: Dimension,
         label: Label = "",
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
@@ -168,6 +176,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle=strokeStyle,
             opacity=opacity,
             roughness=roughness,
+            font_family=font_family,
+            font_size=font_size,
         )
         return invoke(
             service.add_shape, "ellipse", x, y, size, size, label, frame_id=frame_id, **style
@@ -181,6 +191,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         h: Dimension,
         label: Label = "",
         roundness: Roundness | None = None,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         backgroundColor: Color | None = None,
@@ -200,6 +212,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             opacity=opacity,
             roughness=roughness,
             roundness=roundness,
+            font_family=font_family,
+            font_size=font_size,
         )
         return invoke(
             service.add_shape, "diamond", x, y, w, h, label, frame_id=frame_id, **style
@@ -213,6 +227,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         y2: Coordinate,
         label: Label = "",
         elbowed: Boolean = False,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         strokeColor: Color | None = None,
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
@@ -229,6 +245,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle=strokeStyle,
             opacity=opacity,
             roughness=roughness,
+            font_family=font_family,
+            font_size=font_size,
         )
         return invoke(service.add_arrow, x, y, x2, y2, label, elbowed=elbowed, **style)
 
@@ -404,6 +422,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         target_id: ElementId,
         label: Label = "",
         elbowed: Boolean = False,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         strokeColor: Color | None = None,
         strokeWidth: StrokeWidth | None = None,
         strokeStyle: StrokeStyle | None = None,
@@ -423,6 +443,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
                 strokeStyle=strokeStyle,
                 opacity=opacity,
                 roughness=roughness,
+                font_family=font_family,
+                font_size=font_size,
             ),
         )
 
@@ -583,6 +605,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         strokeStyle: StrokeStyle | None = None,
         opacity: Opacity | None = None,
         roughness: Roughness | None = None,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
     ) -> ArchitectureResult:
         """Replace the scene with a diagram from comma/newline-separated components.
 
@@ -600,6 +624,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             strokeStyle=strokeStyle,
             opacity=opacity,
             roughness=roughness,
+            font_family=font_family,
+            font_size=font_size,
         )
         return invoke(service.draw_architecture, prompt, **style)
 
@@ -615,6 +641,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         direction: Direction = "horizontal",
         elbowed: Boolean = False,
         roundness: Roundness | None = None,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
     ) -> GraphResult:
         """Replace the scene with a structured graph and return stable ID mappings."""
         return invoke(
@@ -628,6 +656,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             direction=direction,
             elbowed=elbowed,
             roundness=roundness,
+            font_family=font_family,
+            font_size=font_size,
         )
 
     @mcp.tool(

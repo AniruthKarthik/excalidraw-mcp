@@ -938,6 +938,8 @@ class SceneService:
             layout="horizontal",
             style=style,
             expected_revision=revision,
+            font_family=style.get("font_family"),
+            font_size=style.get("font_size"),
         )
         return {
             **result,
@@ -2087,10 +2089,16 @@ class SceneService:
         roundness=None,
         style=None,
         expected_revision=None,
+        font_family=None,
+        font_size=None,
     ):
         style = dict(style or {})
         if roundness is not None:
             style["roundness"] = roundness
+        if font_family is not None:
+            style["font_family"] = font_family
+        if font_size is not None:
+            style["font_size"] = font_size
         revision = (
             self.state.revision if expected_revision is None else expected_revision
         )
@@ -2227,6 +2235,10 @@ class SceneService:
                 "opacity",
                 "roughness",
                 "roundness",
+                "fontFamily",
+                "font_family",
+                "fontSize",
+                "font_size",
             ):
                 if node.get(k) is not None:
                     node_style[k] = node[k]
@@ -2284,6 +2296,10 @@ class SceneService:
                 "strokeStyle",
                 "opacity",
                 "roughness",
+                "fontFamily",
+                "font_family",
+                "fontSize",
+                "font_size",
             ):
                 if edge.get(k) is not None:
                     edge_style[k] = edge[k]
@@ -2306,12 +2322,17 @@ class SceneService:
             elements.append(connector)
             label_id = None
             if edge["label"]:
+                edge_fs = edge_style.get("font_size", edge_style.get("fontSize", 14))
+                edge_ff = edge_style.get(
+                    "font_family", edge_style.get("fontFamily", style.get("font_family", 2))
+                )
                 label_el = text(
                     (start[0] + end[0]) / 2,
                     (start[1] + end[1]) / 2,
                     edge["label"],
-                    fontSize=14,
-                    **style,
+                    fontSize=edge_fs,
+                    fontFamily=edge_ff,
+                    **edge_style,
                 )
                 bind_text(label_el, connector)
                 _center_label(label_el, connector)

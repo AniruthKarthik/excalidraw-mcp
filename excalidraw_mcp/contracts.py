@@ -60,6 +60,8 @@ class GraphNode(BaseModel):
     strokeStyle: StrokeStyle | None = None
     opacity: Opacity | None = None
     roundness: Roundness | None = None
+    font_family: FontFamily | None = None
+    font_size: FontSize | None = None
 
 
 class GraphCluster(BaseModel):
@@ -81,6 +83,8 @@ class GraphEdge(BaseModel):
     strokeWidth: StrokeWidth | None = None
     strokeStyle: StrokeStyle | None = None
     opacity: Opacity | None = None
+    font_family: FontFamily | None = None
+    font_size: FontSize | None = None
 
     @model_validator(mode="after")
     def distinct_ends(self):
