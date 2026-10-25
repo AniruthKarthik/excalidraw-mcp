@@ -915,7 +915,7 @@ class SceneService:
             "defaults": defaults,
         }
 
-    def draw_architecture(self, prompt, **style):
+    def draw_architecture(self, prompt, wrap_threshold=4, **style):
         revision = self.state.revision
         nodes = parse_architecture(prompt)
         if not nodes or any(not node["label"].strip() for node in nodes):
@@ -932,15 +932,29 @@ class SceneService:
             }
             for i in range(1, len(nodes))
         ]
-        result = self.draw_graph(
-            graph_nodes,
-            edges,
-            layout="horizontal",
-            style=style,
-            expected_revision=revision,
-            font_family=style.get("font_family"),
-            font_size=style.get("font_size"),
-        )
+        if len(graph_nodes) > wrap_threshold:
+            from .layout import grid_layout
+            cols = max(3, math.ceil(math.sqrt(len(graph_nodes) * 1.5)))
+            positioned_nodes = grid_layout(graph_nodes, cols=cols, snake=True)
+            result = self.draw_graph(
+                positioned_nodes,
+                edges,
+                layout="preset",
+                style=style,
+                expected_revision=revision,
+                font_family=style.get("font_family"),
+                font_size=style.get("font_size"),
+            )
+        else:
+            result = self.draw_graph(
+                graph_nodes,
+                edges,
+                layout="horizontal",
+                style=style,
+                expected_revision=revision,
+                font_family=style.get("font_family"),
+                font_size=style.get("font_size"),
+            )
         return {
             **result,
             "url": None,
@@ -2223,6 +2237,8 @@ class SceneService:
                         raise
             elif layout in ("horizontal", "vertical"):
                 positioned = linear_layout(normalized_nodes, layout)
+            elif layout == "preset":
+                positioned = normalized_nodes
             else:
                 raise SceneError("layout must be layered, horizontal or vertical")
 

@@ -80,21 +80,51 @@ def _compute_bounds(
         x, y = float(el.get("x", 0)), float(el.get("y", 0))
         w, h = float(el.get("width", 0)), float(el.get("height", 0))
         etype = el.get("type")
+        angle = float(el.get("angle", 0))
 
         if etype in ("arrow", "line", "freedraw"):
             points = el.get("points") or [[0.0, 0.0], [w, h]]
-            for pt in points:
-                px = x + float(pt[0])
-                py = y + float(pt[1])
-                min_x = min(min_x, px)
-                min_y = min(min_y, py)
-                max_x = max(max_x, px)
-                max_y = max(max_y, py)
+            if abs(angle) > 1e-4:
+                cx = x + w / 2.0
+                cy = y + h / 2.0
+                cos_a = math.cos(angle)
+                sin_a = math.sin(angle)
+                for pt in points:
+                    px = x + float(pt[0])
+                    py = y + float(pt[1])
+                    rx = cx + (px - cx) * cos_a - (py - cy) * sin_a
+                    ry = cy + (px - cx) * sin_a + (py - cy) * cos_a
+                    min_x = min(min_x, rx)
+                    min_y = min(min_y, ry)
+                    max_x = max(max_x, rx)
+                    max_y = max(max_y, ry)
+            else:
+                for pt in points:
+                    px = x + float(pt[0])
+                    py = y + float(pt[1])
+                    min_x = min(min_x, px)
+                    min_y = min(min_y, py)
+                    max_x = max(max_x, px)
+                    max_y = max(max_y, py)
         else:
-            min_x = min(min_x, x)
-            min_y = min(min_y, y)
-            max_x = max(max_x, x + w)
-            max_y = max(max_y, y + h)
+            if abs(angle) > 1e-4:
+                cx = x + w / 2.0
+                cy = y + h / 2.0
+                cos_a = math.cos(angle)
+                sin_a = math.sin(angle)
+                hw, hh = w / 2.0, h / 2.0
+                for dx, dy in ((-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)):
+                    rx = cx + dx * cos_a - dy * sin_a
+                    ry = cy + dx * sin_a + dy * cos_a
+                    min_x = min(min_x, rx)
+                    min_y = min(min_y, ry)
+                    max_x = max(max_x, rx)
+                    max_y = max(max_y, ry)
+            else:
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x + w)
+                max_y = max(max_y, y + h)
 
     if min_x == float("inf"):
         return default_box

@@ -31,20 +31,73 @@ def shape_dimensions(shape: str, label: str):
 def linear_layout(nodes, direction="horizontal", start_x=100, start_y=100, gap=100):
     if direction not in ("horizontal", "vertical"):
         raise SceneError("Layout direction must be horizontal or vertical")
+    if not nodes:
+        return []
+    dims = [shape_dimensions(n["shape"], n["label"]) for n in nodes]
+    max_cross = (
+        max(h for w, h in dims) if direction == "horizontal" else max(w for w, h in dims)
+    )
     positioned, cursor = [], 0
-    for node in nodes:
-        width, height = shape_dimensions(node["shape"], node["label"])
+    for i, node in enumerate(nodes):
+        width, height = dims[i]
+        if direction == "horizontal":
+            x = start_x + cursor
+            y = start_y + (max_cross - height) / 2.0
+            cursor += width + gap
+        else:
+            x = start_x + (max_cross - width) / 2.0
+            y = start_y + cursor
+            cursor += height + gap
         item = {
             **node,
             "label": wrap_label(node["label"]),
-            "x": start_x,
-            "y": start_y,
+            "x": x,
+            "y": y,
             "w": width,
             "h": height,
         }
-        item["x" if direction == "horizontal" else "y"] += cursor
         positioned.append(item)
-        cursor += (width if direction == "horizontal" else height) + gap
+    return positioned
+
+
+def grid_layout(
+    nodes,
+    cols=4,
+    start_x=100,
+    start_y=100,
+    col_gap=60,
+    row_gap=80,
+    snake=True,
+):
+    """Layout nodes in a multi-row grid with snake routing for balanced aspect ratios."""
+    if not nodes:
+        return []
+    dims = [shape_dimensions(n["shape"], n["label"]) for n in nodes]
+    cell_w = max(w for w, h in dims) + col_gap
+    cell_h = max(h for w, h in dims) + row_gap
+
+    positioned = []
+    for i, node in enumerate(nodes):
+        row = i // cols
+        col_in_row = i % cols
+        if snake and (row % 2 == 1):
+            col = (cols - 1) - col_in_row
+        else:
+            col = col_in_row
+
+        w, h = dims[i]
+        x = start_x + col * cell_w + (cell_w - col_gap - w) / 2.0
+        y = start_y + row * cell_h + (cell_h - row_gap - h) / 2.0
+        positioned.append(
+            {
+                **node,
+                "label": wrap_label(node["label"]),
+                "x": x,
+                "y": y,
+                "w": w,
+                "h": h,
+            }
+        )
     return positioned
 
 
@@ -91,15 +144,49 @@ def layered_layout(
         node_id: shape_dimensions(lookup[node_id]["shape"], lookup[node_id]["label"])
         for node_id in ids
     }
+
+    # Calculate dynamic inter-rank gap to accommodate long edge labels without overlap
+    rank_by_id = {node["id"]: rank.get(node["id"], 0) for node in nodes}
+    inter_rank_gaps = {}
+    sorted_levels = sorted(groups)
+    for i, level in enumerate(sorted_levels[:-1]):
+        next_level = sorted_levels[i + 1]
+        spanning_edges = [
+            e
+            for e in edges
+            if (
+                rank_by_id.get(e["source"]) == level
+                and rank_by_id.get(e["target"]) >= next_level
+            )
+            or (
+                rank_by_id.get(e["target"]) == level
+                and rank_by_id.get(e["source"]) >= next_level
+            )
+        ]
+        max_lbl_len = 0
+        for e in spanning_edges:
+            lbl = e.get("label") or ""
+            if lbl:
+                max_lbl_len = max(
+                    max_lbl_len, max(len(line) for line in lbl.splitlines())
+                )
+
+        if direction == "horizontal":
+            needed_gap = max_lbl_len * 9 + 50 if max_lbl_len > 0 else rank_gap
+        else:
+            needed_gap = max_lbl_len * 4 + 40 if max_lbl_len > 0 else rank_gap
+        inter_rank_gaps[level] = max(rank_gap, needed_gap)
+
     offsets, cursor = {}, 0
-    for level in sorted(groups):
+    for level in sorted_levels:
         offsets[level] = cursor
+        rg = inter_rank_gaps.get(level, rank_gap)
         cursor += (
             max(
                 sizes[n["id"]][0 if direction == "horizontal" else 1]
                 for n in groups[level]
             )
-            + rank_gap
+            + rg
         )
     cross_dim = 1 if direction == "horizontal" else 0
     rank_cross_spans = {}
