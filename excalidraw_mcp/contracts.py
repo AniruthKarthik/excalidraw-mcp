@@ -384,6 +384,7 @@ class ShareUrlResult(TypedDict):
     url: str
     id: str
     revision: int
+    backup_path: NotRequired[str | None]
 
 
 class SceneDescriptionResult(TypedDict):

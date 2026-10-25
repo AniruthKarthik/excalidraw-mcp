@@ -3041,14 +3041,14 @@ class SceneService:
             "revision": revision,
         }
 
-    def export_to_excalidraw_url(self, name=None, timeout=12.0):
+    def export_to_excalidraw_url(self, name=None, timeout=12.0, verify=True):
         if name:
             doc = load_scene(name)
         else:
             doc = self.state.document()
         from .sharing import export_to_excalidraw_url
 
-        res = export_to_excalidraw_url(doc, timeout=timeout)
+        res = export_to_excalidraw_url(doc, timeout=timeout, verify=verify)
         return {**res, "revision": self.state.revision}
 
     def import_scene(self, data, mode="replace", offset_x=0.0, offset_y=0.0):
