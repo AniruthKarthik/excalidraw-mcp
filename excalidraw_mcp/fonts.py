@@ -57,7 +57,7 @@ def _classify_category(name: str) -> str:
         return "monospace"
     if any(k in lower for k in ("serif", "times", "roman", "georgia", "garamond", "charter", "cambria", "c059")):
         return "serif"
-    if any(k in lower for k in ("hand", "script", "virgil", "comic", "casual", "chalk", "caveat", "comfortaa")):
+    if any(k in lower for k in ("hand", "script", "virgil", "comic", "casual", "chalk", "caveat", "comfortaa", "excalifont")):
         return "handwriting"
     return "sans-serif"
 
@@ -88,7 +88,17 @@ class FontRegistry:
         for cat in self._by_category:
             self._by_category[cat].clear()
 
-        # 1. Try fc-list on Linux/macOS
+        # 1. Bundled assets directory (always prioritized)
+        bundled_dir = Path(__file__).resolve().parent / "assets" / "fonts"
+        if bundled_dir.is_dir():
+            self._scan_directory(bundled_dir)
+
+        # 2. Environment variable directory
+        env_dir = os.environ.get("EXCALIDRAW_FONT_DIR")
+        if env_dir and os.path.isdir(env_dir):
+            self._scan_directory(env_dir)
+
+        # 3. Try fc-list on Linux/macOS
         found_via_fclist = False
         if shutil.which("fc-list"):
             try:
@@ -121,31 +131,36 @@ class FontRegistry:
             except Exception:
                 found_via_fclist = False
 
-        # 2. Filesystem scan fallback or supplement
+        # 4. Filesystem scan fallback or supplement
         if not found_via_fclist:
             for font_dir in _get_font_directories():
-                for ext in ("*.ttf", "*.otf", "**/*.ttf", "**/*.otf"):
-                    for file_path in glob.glob(os.path.join(font_dir, ext), recursive=True):
-                        try:
-                            # Extract true name from PIL
-                            test_font = ImageFont.truetype(file_path, 12)
-                            names = test_font.getname()
-                            family = names[0] if names else Path(file_path).stem
-                            style = names[1] if len(names) > 1 else "Regular"
-                            category = _classify_category(family)
-                            record = {
-                                "family": family,
-                                "style": style,
-                                "path": file_path,
-                                "category": category,
-                            }
-                            self._add_record(record)
-                        except Exception:
-                            continue
+                self._scan_directory(font_dir)
 
         self._discovered = True
 
+    def _scan_directory(self, font_dir: str | Path):
+        for ext in ("**/*.ttf", "**/*.otf", "**/*.ttc"):
+            for file_path in glob.glob(os.path.join(str(font_dir), ext), recursive=True):
+                try:
+                    test_font = ImageFont.truetype(file_path, 12)
+                    names = test_font.getname()
+                    family = names[0] if names else Path(file_path).stem
+                    style = names[1] if len(names) > 1 else "Regular"
+                    category = _classify_category(family)
+                    record = {
+                        "family": family,
+                        "style": style,
+                        "path": file_path,
+                        "category": category,
+                    }
+                    self._add_record(record)
+                except Exception:
+                    continue
+
     def _add_record(self, record: dict[str, str]):
+        # Prevent duplicate paths
+        if any(r["path"] == record["path"] for r in self._fonts):
+            return
         self._fonts.append(record)
         fam_key = record["family"].lower()
         if fam_key not in self._by_family:
@@ -171,15 +186,25 @@ class FontRegistry:
         self.discover()
         size = max(6, min(200, int(size)))
 
-        # 1. Map Excalidraw integer families
+        # 1. Map Excalidraw integer or string family names
         if isinstance(family, int):
             int_map = {
-                1: "handwriting",  # Virgil
-                2: "sans-serif",   # Helvetica
-                3: "monospace",    # Cascadia / code
+                1: "excalifont",  # Excalifont (Virgil)
+                2: "sans-serif",  # Helvetica
+                3: "monospace",  # Cascadia / code
                 4: "handwriting",  # Comic Shanns
             }
             family = int_map.get(family, "sans-serif")
+        elif isinstance(family, str):
+            f_norm = family.strip().lower()
+            if f_norm in ("1", "excalifont", "virgil"):
+                family = "excalifont"
+            elif f_norm in ("2", "sans-serif", "sans", "helvetica"):
+                family = "sans-serif"
+            elif f_norm in ("3", "monospace", "mono", "code", "cascadia"):
+                family = "monospace"
+            elif f_norm in ("4", "comic-shanns", "comic", "comic shanns"):
+                family = "handwriting"
 
         # 2. Check environment overrides
         if not family:

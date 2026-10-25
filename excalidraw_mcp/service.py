@@ -7,7 +7,16 @@ import uuid
 from pathlib import Path
 
 from excalidraw_mcp.config import max_export_bytes
-from excalidraw_mcp.elements import arrow, bind_text, diamond, ellipse, frame, rect, text
+from excalidraw_mcp.elements import (
+    arrow,
+    bind_text,
+    diamond,
+    ellipse,
+    frame,
+    normalize_font_family,
+    rect,
+    text,
+)
 from excalidraw_mcp.errors import SceneError
 from excalidraw_mcp.document import serialize_document
 from excalidraw_mcp.models import _finite_number, new_document
@@ -34,7 +43,16 @@ def _shape_elements(shape, x, y, w, h, label, style, frame_id=None):
     elements = [shape_el]
     if label:
         label_style = {
-            k: v for k, v in style.items() if k in ("strokeColor", "opacity")
+            k: v
+            for k, v in style.items()
+            if k in (
+                "strokeColor",
+                "opacity",
+                "fontFamily",
+                "font_family",
+                "fontSize",
+                "font_size",
+            )
         }
         label_el = text(x, y, label, **label_style)
         if frame_id:
@@ -174,12 +192,28 @@ class SceneService:
         ids = self.state.add_many(elements)
         return {"arrow_id": ids[0], "label_id": ids[1] if len(ids) > 1 else None}
 
-    def add_text(self, x, y, content, font_size=20, frame_id=None, **style):
+    def add_text(
+        self,
+        x,
+        y,
+        content,
+        font_size=20,
+        font_family=None,
+        frame_id=None,
+        **style,
+    ):
         if not isinstance(content, str) or not content.strip():
             raise SceneError("Text content cannot be empty")
         if frame_id:
             style["frameId"] = frame_id
-        element = text(x, y, content, fontSize=font_size, **style)
+        element = text(
+            x,
+            y,
+            content,
+            fontSize=font_size,
+            fontFamily=font_family or 2,
+            **style,
+        )
         return {"text_id": self.state.add(element)}
 
     def get_element(self, element_id):
@@ -385,6 +419,8 @@ class SceneService:
         roundness=None,
         frame_id=None,
         elbowed=None,
+        font_family=None,
+        font_size=None,
     ):
         updates = {
             "strokeColor": stroke_color,
@@ -407,8 +443,14 @@ class SceneService:
                 updates["roundness"] = roundness
         if elbowed is not None:
             updates["elbowed"] = bool(elbowed)
-        if label is None and frame_id is None and not updates:
-            raise SceneError("Provide a label or at least one style update")
+        if (
+            label is None
+            and frame_id is None
+            and not updates
+            and font_family is None
+            and font_size is None
+        ):
+            raise SceneError("Provide a label or at least one style or font update")
 
         def update(document):
             index = _active(document)
@@ -443,6 +485,40 @@ class SceneService:
                 container_id = el.get("containerId")
                 container = index.get(container_id) if container_id else None
                 label_id = el["id"]
+                if font_family is not None:
+                    el["fontFamily"] = normalize_font_family(font_family)
+                    if isinstance(font_family, str) and font_family.strip().lower() not in (
+                        "1",
+                        "2",
+                        "3",
+                        "4",
+                        "excalifont",
+                        "virgil",
+                        "sans-serif",
+                        "sans",
+                        "helvetica",
+                        "normal",
+                        "monospace",
+                        "mono",
+                        "code",
+                        "cascadia",
+                        "comic-shanns",
+                        "comic",
+                        "comic shanns",
+                        "handwriting",
+                        "hand-drawn",
+                        "hand",
+                    ):
+                        el.setdefault("customData", {})["fontFamily"] = font_family.strip()
+                    elif "customData" in el and "fontFamily" in el["customData"]:
+                        el["customData"]["fontFamily"] = str(font_family)
+                if font_size is not None:
+                    el["fontSize"] = font_size
+                    lines = el["text"].split("\n")
+                    el["width"] = max(map(len, lines)) * el["fontSize"] * 0.6
+                    el["height"] = len(lines) * el["fontSize"] * el.get("lineHeight", 1.25)
+                    if container:
+                        _center_label(el, container)
                 if label is not None:
                     if not label:
                         if container is None:
@@ -490,12 +566,13 @@ class SceneService:
                                 ),
                                 "opacity": updates.get("opacity", el.get("opacity", 100)),
                             }
-                            font_size = 14 if el["type"] == "arrow" else 20
+                            f_size = font_size if font_size is not None else (14 if el["type"] == "arrow" else 20)
                             target = text(
                                 el["x"],
                                 el["y"],
                                 label,
-                                fontSize=font_size,
+                                fontSize=f_size,
+                                fontFamily=font_family or 2,
                                 **label_style,
                             )
                             if el.get("frameId"):
@@ -516,6 +593,10 @@ class SceneService:
                         target = None
                     else:
                         target["text"] = target["originalText"] = label
+                        if font_size is not None:
+                            target["fontSize"] = font_size
+                        if font_family is not None:
+                            target["fontFamily"] = normalize_font_family(font_family)
                         target["width"] = (
                             max(map(len, label.split("\n"))) * target["fontSize"] * 0.6
                         )
@@ -525,6 +606,15 @@ class SceneService:
                             * target["lineHeight"]
                         )
                         _center_label(target, el)
+                elif target is not None:
+                    if font_size is not None:
+                        target["fontSize"] = font_size
+                    if font_family is not None:
+                        target["fontFamily"] = normalize_font_family(font_family)
+                    lines = target["text"].split("\n")
+                    target["width"] = max(map(len, lines)) * target["fontSize"] * 0.6
+                    target["height"] = len(lines) * target["fontSize"] * target.get("lineHeight", 1.25)
+                    _center_label(target, el)
                 el.update(updates)
                 return {
                     "status": "updated",
@@ -817,6 +907,7 @@ class SceneService:
             or "Adwaita Sans / Droid Sans / System Sans",
             "monospace": os.environ.get("EXCALIDRAW_MONO_FONT")
             or "JetBrains Mono / Adwaita Mono / System Mono",
+            "handwriting": "Excalifont",
         }
         return {
             "fonts": raw_fonts,
@@ -1223,6 +1314,7 @@ class SceneService:
                             f"Operation {i} (add_text): content cannot be empty"
                         )
                     font_size = op.get("font_size", 20)
+                    font_family = op.get("font_family")
                     style = {
                         k: v
                         for k, v in op.items()
@@ -1232,7 +1324,14 @@ class SceneService:
                     if frame_id:
                         _require(index, frame_id)
                         style["frameId"] = frame_id
-                    txt_el = text(x, y, content, fontSize=font_size, **style)
+                    txt_el = text(
+                        x,
+                        y,
+                        content,
+                        fontSize=font_size,
+                        fontFamily=font_family or 2,
+                        **style,
+                    )
                     document["elements"].append(txt_el)
                     index[txt_el["id"]] = txt_el
                     res = {"action": "add_text", "text_id": txt_el["id"]}
@@ -1534,6 +1633,8 @@ class SceneService:
                             f"Operation {i} (update_element): cannot update locked element '{eid}'"
                         )
                     label = op.get("label")
+                    f_fam = op.get("font_family")
+                    f_size = op.get("font_size")
                     style_keys = (
                         "strokeColor",
                         "backgroundColor",
@@ -1576,6 +1677,40 @@ class SceneService:
                     elif el["type"] == "text":
                         cid = el.get("containerId")
                         container = index.get(cid) if cid else None
+                        if f_fam is not None:
+                            el["fontFamily"] = normalize_font_family(f_fam)
+                            if isinstance(f_fam, str) and f_fam.strip().lower() not in (
+                                "1",
+                                "2",
+                                "3",
+                                "4",
+                                "excalifont",
+                                "virgil",
+                                "sans-serif",
+                                "sans",
+                                "helvetica",
+                                "normal",
+                                "monospace",
+                                "mono",
+                                "code",
+                                "cascadia",
+                                "comic-shanns",
+                                "comic",
+                                "comic shanns",
+                                "handwriting",
+                                "hand-drawn",
+                                "hand",
+                            ):
+                                el.setdefault("customData", {})["fontFamily"] = f_fam.strip()
+                            elif "customData" in el and "fontFamily" in el["customData"]:
+                                el["customData"]["fontFamily"] = str(f_fam)
+                        if f_size is not None:
+                            el["fontSize"] = f_size
+                            lines = el["text"].split("\n")
+                            el["width"] = max(map(len, lines)) * el["fontSize"] * 0.6
+                            el["height"] = len(lines) * el["fontSize"] * el.get("lineHeight", 1.25)
+                            if container:
+                                _center_label(el, container)
                         if label is not None:
                             if not label:
                                 if container is None:
@@ -1616,12 +1751,13 @@ class SceneService:
                                         "opacity", el.get("opacity", 100)
                                     ),
                                 }
-                                fs = 14 if el["type"] == "arrow" else 20
+                                fs = f_size if f_size is not None else (14 if el["type"] == "arrow" else 20)
                                 target = text(
                                     el["x"],
                                     el["y"],
                                     label,
                                     fontSize=fs,
+                                    fontFamily=f_fam or 2,
                                     **lbl_style,
                                 )
                                 if el.get("frameId"):
@@ -1639,6 +1775,10 @@ class SceneService:
                                 index.pop(target["id"], None)
                             elif target is not None:
                                 target["text"] = target["originalText"] = label
+                                if f_size is not None:
+                                    target["fontSize"] = f_size
+                                if f_fam is not None:
+                                    target["fontFamily"] = normalize_font_family(f_fam)
                                 target["width"] = (
                                     max(map(len, label.split("\n")))
                                     * target["fontSize"]
@@ -1650,6 +1790,15 @@ class SceneService:
                                     * target["lineHeight"]
                                 )
                                 _center_label(target, el)
+                        elif target is not None:
+                            if f_size is not None:
+                                target["fontSize"] = f_size
+                            if f_fam is not None:
+                                target["fontFamily"] = normalize_font_family(f_fam)
+                            lines = target["text"].split("\n")
+                            target["width"] = max(map(len, lines)) * target["fontSize"] * 0.6
+                            target["height"] = len(lines) * target["fontSize"] * target.get("lineHeight", 1.25)
+                            _center_label(target, el)
                         el.update(updates)
                     results.append(
                         {

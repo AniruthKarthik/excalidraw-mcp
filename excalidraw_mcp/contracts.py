@@ -29,6 +29,11 @@ ElementType = Literal["rectangle", "ellipse", "diamond", "arrow", "text", "frame
 Roundness = Literal["adaptive", "round", "sharp"]
 CodeTheme = Literal["dark", "monokai", "github-dark", "light", "solarized-dark"]
 FontCategory = Literal["sans-serif", "monospace", "serif", "handwriting"]
+FontFamily = (
+    Literal["excalifont", "sans-serif", "monospace", "comic-shanns", "handwriting"]
+    | str
+    | int
+)
 LayoutType = Literal["layered", "horizontal", "vertical"]
 Direction = Literal["horizontal", "vertical"]
 Offset = Annotated[int, Field(strict=True, ge=0)]
@@ -170,7 +175,7 @@ class BatchOperation(BaseModel):
     language: str | None = None
     title: str | None = None
     theme: CodeTheme | None = None
-    font_family: str | None = None
+    font_family: FontFamily | None = None
     line_numbers: bool | None = None
     elbowed: bool | None = None
     roundness: Roundness | None = None

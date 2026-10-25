@@ -34,6 +34,7 @@ from excalidraw_mcp.contracts import (
     FocusResult,
     FontSize,
     FontCategory,
+    FontFamily,
     FontListResult,
     GraphCluster,
     GraphEdge,
@@ -331,17 +332,19 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         y: Coordinate,
         content: NonEmptyText,
         font_size: FontSize = 20,
+        font_family: FontFamily | None = None,
         frame_id: ElementId | None = None,
         strokeColor: Color | None = None,
         opacity: Opacity | None = None,
     ) -> CreateResult:
-        """Add standalone text and return its element ID."""
+        """Add standalone text and return its element ID. font_family can be 'excalifont', 'sans-serif', 'monospace', 'comic-shanns', or an Excalidraw font number (1=Excalifont, 2=sans-serif, 3=monospace, 4=comic-shanns)."""
         return invoke(
             service.add_text,
             x,
             y,
             content,
             font_size,
+            font_family=font_family,
             frame_id=frame_id,
             **_style_kwargs(strokeColor=strokeColor, opacity=opacity),
         )
@@ -353,6 +356,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
     def update_element(
         element_id: ElementId,
         label: Label | None = None,
+        font_family: FontFamily | None = None,
+        font_size: FontSize | None = None,
         roundness: Roundness | None = None,
         frame_id: ElementId | None = None,
         elbowed: Boolean | None = None,
@@ -364,7 +369,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         opacity: Opacity | None = None,
         roughness: Roughness | None = None,
     ) -> UpdateResult:
-        """Update a label and/or styles. An empty label removes an existing label."""
+        """Update a label, font, and/or styles. An empty label removes an existing label."""
         return invoke(
             service.update_element,
             element_id,
@@ -379,6 +384,8 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             roundness=roundness,
             frame_id=frame_id,
             elbowed=elbowed,
+            font_family=font_family,
+            font_size=font_size,
         )
 
     @mcp.tool(

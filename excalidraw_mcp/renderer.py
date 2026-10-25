@@ -441,7 +441,7 @@ def render_scene_image(
         px = tx(t.get("x", 0))
         py = ty(t.get("y", 0))
         font_size = int(t.get("fontSize", 20) * scale)
-        font_fam = t.get("fontFamily") or t.get("customData", {}).get("fontFamily")
+        font_fam = t.get("customData", {}).get("fontFamily") or t.get("fontFamily")
         font = get_font(font_fam, font_size)
         opacity = t.get("opacity", 100)
         stroke_color = _parse_color(t.get("strokeColor", "#1e1e1e"), opacity)

@@ -94,8 +94,68 @@ def frame(x: int, y: int, w: int, h: int, name: str = "", **style):
     return el
 
 
-def text(x: int, y: int, content: str, fontSize: int = 20, **style):
+def normalize_font_family(family: int | str | None) -> int:
+    """Normalize font family name or number to Excalidraw integer code.
+
+    1: Excalifont / Virgil (Hand-drawn)
+    2: Sans-serif / Helvetica (Normal)
+    3: Cascadia / Monospace (Code)
+    4: Comic Shanns
+    """
+    if family is None:
+        return 2
+    if isinstance(family, int):
+        return family if family >= 1 else 2
+    f_str = str(family).strip().lower()
+    if f_str in ("1", "excalifont", "virgil", "handwriting", "hand-drawn", "hand"):
+        return 1
+    if f_str in ("2", "sans-serif", "sans", "helvetica", "normal"):
+        return 2
+    if f_str in ("3", "monospace", "mono", "code", "cascadia"):
+        return 3
+    if f_str in ("4", "comic-shanns", "comic", "comic shanns"):
+        return 4
+    if f_str.isdigit() and int(f_str) >= 1:
+        return int(f_str)
+    return 2
+
+
+def text(
+    x: int,
+    y: int,
+    content: str,
+    fontSize: int = 20,
+    fontFamily: int | str = 2,
+    **style,
+):
     content = content.replace("\r\n", "\n").replace("\r", "\n")
+    ff = style.pop("font_family", style.pop("fontFamily", fontFamily))
+    norm_ff = normalize_font_family(ff)
+    custom_data = style.pop("customData", {}) or {}
+    if isinstance(ff, str) and ff.strip().lower() not in (
+        "1",
+        "2",
+        "3",
+        "4",
+        "excalifont",
+        "virgil",
+        "sans-serif",
+        "sans",
+        "helvetica",
+        "normal",
+        "monospace",
+        "mono",
+        "code",
+        "cascadia",
+        "comic-shanns",
+        "comic",
+        "comic shanns",
+        "handwriting",
+        "hand-drawn",
+        "hand",
+    ):
+        custom_data["fontFamily"] = ff.strip()
+
     el = {
         "id": str(uuid.uuid4()),
         "type": "text",
@@ -105,7 +165,7 @@ def text(x: int, y: int, content: str, fontSize: int = 20, **style):
         "fontSize": fontSize,
         "width": max(map(len, content.split("\n"))) * fontSize * 0.6,
         "height": len(content.split("\n")) * fontSize * 1.25,
-        "fontFamily": 2,
+        "fontFamily": norm_ff,
         "lineHeight": 1.25,
         "textAlign": "left",
         "verticalAlign": "top",
@@ -113,6 +173,8 @@ def text(x: int, y: int, content: str, fontSize: int = 20, **style):
         "autoResize": True,
         "containerId": None,
     }
+    if custom_data:
+        el["customData"] = custom_data
     _apply_style(el, style)
     return el
 
