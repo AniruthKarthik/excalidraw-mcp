@@ -2091,6 +2091,7 @@ class SceneService:
         expected_revision=None,
         font_family=None,
         font_size=None,
+        cycle_fallback=False,
     ):
         style = dict(style or {})
         if roundness is not None:
@@ -2211,9 +2212,15 @@ class SceneService:
                 cluster_map[f["id"]] = frame_el["id"]
         else:
             if layout == "layered":
-                positioned = layered_layout(
-                    normalized_nodes, normalized_edges, direction
-                )
+                try:
+                    positioned = layered_layout(
+                        normalized_nodes, normalized_edges, direction
+                    )
+                except SceneError as exc:
+                    if cycle_fallback and "acyclic" in str(exc):
+                        positioned = linear_layout(normalized_nodes, direction)
+                    else:
+                        raise
             elif layout in ("horizontal", "vertical"):
                 positioned = linear_layout(normalized_nodes, layout)
             else:
@@ -2258,12 +2265,12 @@ class SceneService:
                 "label_id": group[1]["id"] if len(group) > 1 else None,
             }
         edge_map = {}
-        pair_counts: dict[tuple[str, str], int] = {}
+        canon_counts: dict[tuple[str, str], int] = {}
         for edge in normalized_edges:
-            pair = (edge["source"], edge["target"])
-            pair_counts[pair] = pair_counts.get(pair, 0) + 1
+            cp = tuple(sorted([edge["source"], edge["target"]]))
+            canon_counts[cp] = canon_counts.get(cp, 0) + 1
 
-        pair_seen: dict[tuple[str, str], int] = {}
+        canon_seen: dict[tuple[str, str], int] = {}
 
         for edge in normalized_edges:
             source, target = (
@@ -2273,14 +2280,22 @@ class SceneService:
             start, end = boundary_point(source, target, 1), boundary_point(
                 target, source, -1
             )
-            pair = (edge["source"], edge["target"])
-            total_for_pair = pair_counts[pair]
-            idx_for_pair = pair_seen.get(pair, 0)
-            pair_seen[pair] = idx_for_pair + 1
+            cp = tuple(sorted([edge["source"], edge["target"]]))
+            total_for_pair = canon_counts[cp]
+            idx_for_pair = canon_seen.get(cp, 0)
+            canon_seen[cp] = idx_for_pair + 1
 
-            if total_for_pair > 1:
-                dx = end[0] - start[0]
-                dy = end[1] - start[1]
+            if total_for_pair > 1 and cp[0] != cp[1]:
+                # Compute normal vector based on canonical pair node centers so opposing
+                # edges share the same coordinate frame and are offset along parallel lanes
+                n0 = positioned_map[cp[0]]
+                n1 = positioned_map[cp[1]]
+                c0_x = n0["x"] + n0["w"] / 2.0
+                c0_y = n0["y"] + n0["h"] / 2.0
+                c1_x = n1["x"] + n1["w"] / 2.0
+                c1_y = n1["y"] + n1["h"] / 2.0
+                dx = c1_x - c0_x
+                dy = c1_y - c0_y
                 dist = math.hypot(dx, dy)
                 if dist > 1e-4:
                     nx = -dy / dist
@@ -2513,6 +2528,7 @@ class SceneService:
             direction=parsed_direction,
             elbowed=elbowed,
             roundness=roundness,
+            cycle_fallback=True,
         )
 
     def get_viewport(self):

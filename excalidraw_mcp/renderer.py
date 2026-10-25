@@ -216,10 +216,12 @@ def render_scene_image(
     app_state = document.get("appState") or {}
     bg_color_hex = app_state.get("viewBackgroundColor", "#ffffff")
 
+    canvas_bg = _parse_color(bg_color_hex, 100)
+    if canvas_bg[3] == 0:
+        canvas_bg = (255, 255, 255, 255)
+
     if background:
-        bg_color = _parse_color(bg_color_hex, 100)
-        if bg_color[3] == 0:
-            bg_color = (255, 255, 255, 255)
+        bg_color = canvas_bg
     else:
         bg_color = (0, 0, 0, 0)
 
@@ -424,7 +426,30 @@ def render_scene_image(
         stroke_color = _parse_color(a.get("strokeColor", "#1e1e1e"), opacity)
         stroke_w = max(1, int(a.get("strokeWidth", 2) * effective_scale))
 
-        screen_pts = [(tx(ax + pt[0]), ty(ay + pt[1])) for pt in points]
+        # Orthogonal routing for elbowed lines/arrows with simple 2-point geometry
+        is_elbowed = bool(a.get("elbowed"))
+        if is_elbowed and len(points) == 2:
+            p0, p1 = points[0], points[1]
+            dx = float(p1[0]) - float(p0[0])
+            dy = float(p1[1]) - float(p0[1])
+            if abs(dx) > abs(dy):
+                pts = [
+                    p0,
+                    [float(p0[0]) + dx / 2.0, float(p0[1])],
+                    [float(p0[0]) + dx / 2.0, float(p1[1])],
+                    p1,
+                ]
+            else:
+                pts = [
+                    p0,
+                    [float(p0[0]), float(p0[1]) + dy / 2.0],
+                    [float(p1[0]), float(p0[1]) + dy / 2.0],
+                    p1,
+                ]
+        else:
+            pts = points
+
+        screen_pts = [(tx(ax + pt[0]), ty(ay + pt[1])) for pt in pts]
         if len(screen_pts) >= 2:
             _draw_polyline(draw, screen_pts, fill=stroke_color, width=stroke_w, stroke_style=a.get("strokeStyle", "solid"))
 
@@ -493,6 +518,13 @@ def render_scene_image(
                     cy = float(container.get("y", 0.0))
                 scx = tx(cx)
                 scy = ty(cy)
+
+                # Mask background behind label to prevent arrow stroke from striking through text
+                tb = draw.textbbox((scx, scy), text_content, font=font, anchor="mm", align="center")
+                pad = 4.0 * effective_scale
+                mask_box = [tb[0] - pad, tb[1] - pad, tb[2] + pad, tb[3] + pad]
+                draw.rounded_rectangle(mask_box, radius=max(2, int(3 * effective_scale)), fill=canvas_bg)
+
                 draw.text(
                     (scx, scy),
                     text_content,

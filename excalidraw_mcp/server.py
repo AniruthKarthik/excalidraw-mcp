@@ -643,6 +643,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
         roundness: Roundness | None = None,
         font_family: FontFamily | None = None,
         font_size: FontSize | None = None,
+        cycle_fallback: Boolean = False,
     ) -> GraphResult:
         """Replace the scene with a structured graph and return stable ID mappings."""
         return invoke(
@@ -658,6 +659,7 @@ def create_server(service: SceneService | None = None) -> FastMCP:
             roundness=roundness,
             font_family=font_family,
             font_size=font_size,
+            cycle_fallback=cycle_fallback,
         )
 
     @mcp.tool(
