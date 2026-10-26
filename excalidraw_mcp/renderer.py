@@ -464,23 +464,35 @@ def render_scene_image(
         # Orthogonal routing for elbowed lines/arrows with simple 2-point geometry
         is_elbowed = bool(a.get("elbowed"))
         if is_elbowed and len(points) == 2:
-            p0, p1 = points[0], points[1]
-            dx = float(p1[0]) - float(p0[0])
-            dy = float(p1[1]) - float(p0[1])
-            if abs(dx) > abs(dy):
-                pts = [
-                    p0,
-                    [float(p0[0]) + dx / 2.0, float(p0[1])],
-                    [float(p0[0]) + dx / 2.0, float(p1[1])],
-                    p1,
-                ]
+            sb = (a.get("startBinding") or {}).get("elementId")
+            eb = (a.get("endBinding") or {}).get("elementId")
+            if sb in element_index and eb in element_index:
+                from .routing import route_orthogonal_connector
+                routed = route_orthogonal_connector(
+                    element_index[sb],
+                    element_index[eb],
+                    obstacles=shapes,
+                    clearance=15.0,
+                )
+                pts = [[pt[0] - ax, pt[1] - ay] for pt in routed]
             else:
-                pts = [
-                    p0,
-                    [float(p0[0]), float(p0[1]) + dy / 2.0],
-                    [float(p1[0]), float(p0[1]) + dy / 2.0],
-                    p1,
-                ]
+                p0, p1 = points[0], points[1]
+                dx = float(p1[0]) - float(p0[0])
+                dy = float(p1[1]) - float(p0[1])
+                if abs(dx) > abs(dy):
+                    pts = [
+                        p0,
+                        [float(p0[0]) + dx / 2.0, float(p0[1])],
+                        [float(p0[0]) + dx / 2.0, float(p1[1])],
+                        p1,
+                    ]
+                else:
+                    pts = [
+                        p0,
+                        [float(p0[0]), float(p0[1]) + dy / 2.0],
+                        [float(p1[0]), float(p0[1]) + dy / 2.0],
+                        p1,
+                    ]
         else:
             pts = points
 
@@ -543,7 +555,10 @@ def render_scene_image(
                     [0.0, 0.0],
                     [float(container.get("width", 0.0)), float(container.get("height", 0.0))],
                 ]
-                if len(pts) >= 2:
+                if len(pts) > 2 and "x" in t and "y" in t and t.get("width") and t.get("height"):
+                    cx = float(t["x"]) + float(t["width"]) / 2.0
+                    cy = float(t["y"]) + float(t["height"]) / 2.0
+                elif len(pts) >= 2:
                     p0 = pts[0]
                     p1 = pts[-1]
                     cx = float(container.get("x", 0.0)) + (float(p0[0]) + float(p1[0])) / 2.0

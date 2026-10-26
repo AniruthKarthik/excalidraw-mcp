@@ -626,9 +626,40 @@ def check_diagram_geometry(document_or_elements, min_gap=30.0):
                     }
                 )
 
+    # 3. Connector collision check against unrelated obstacle shapes
+    arrows = [e for e in active if e.get("type") in ("arrow", "line")]
+    connector_collisions = []
+    from .routing import segment_intersects_rect
+    for a in arrows:
+        sb = (a.get("startBinding") or {}).get("elementId")
+        eb = (a.get("endBinding") or {}).get("elementId")
+        ax, ay = float(a.get("x", 0.0)), float(a.get("y", 0.0))
+        pts = a.get("points") or [[0.0, 0.0], [float(a.get("width", 0.0)), float(a.get("height", 0.0))]]
+        world_pts = [(ax + float(p[0]), ay + float(p[1])) for p in pts]
+        for k in range(len(world_pts) - 1):
+            p1 = world_pts[k]
+            p2 = world_pts[k + 1]
+            for s in shapes:
+                if s["id"] in (sb, eb):
+                    continue
+                sx, sy = float(s.get("x", 0.0)), float(s.get("y", 0.0))
+                sw, sh = float(s.get("width", 0.0)), float(s.get("height", 0.0))
+                if segment_intersects_rect(p1, p2, (sx, sy, sx + sw, sy + sh), margin=2.0):
+                    connector_collisions.append(
+                        {
+                            "arrow_id": a["id"],
+                            "source_id": sb,
+                            "target_id": eb,
+                            "obstacle_id": s["id"],
+                            "obstacle_label": bound_map.get(s["id"], {}).get("text", "")[:30],
+                        }
+                    )
+
     return {
-        "valid": len(overlaps) == 0 and len(containment_violations) == 0,
+        "valid": len(overlaps) == 0 and len(containment_violations) == 0 and len(connector_collisions) == 0,
         "overlap_count": len(overlaps),
+        "connector_collision_count": len(connector_collisions),
+        "connector_collisions": connector_collisions,
         "overlaps": overlaps,
         "containment_violations": containment_violations,
         "gap_violations": gap_violations,
@@ -836,38 +867,9 @@ def resolve_scene_layout(
             lbl["x"] = cx - float(lbl.get("width", 0.0)) / 2.0
             lbl["y"] = cy - float(lbl.get("height", 0.0)) / 2.0
 
-    # Step 9: Recalculate Connector Endpoints via boundary_point()
-    for a in arrows:
-        sb = (a.get("startBinding") or {}).get("elementId")
-        eb = (a.get("endBinding") or {}).get("elementId")
-        if sb in element_index and eb in element_index:
-            s_el, t_el = element_index[sb], element_index[eb]
-            sn = {
-                "x": float(s_el.get("x", 0)),
-                "y": float(s_el.get("y", 0)),
-                "w": float(s_el.get("width", 0)),
-                "h": float(s_el.get("height", 0)),
-                "shape": s_el.get("type", "rectangle"),
-                "angle": float(s_el.get("angle", 0)),
-            }
-            tn = {
-                "x": float(t_el.get("x", 0)),
-                "y": float(t_el.get("y", 0)),
-                "w": float(t_el.get("width", 0)),
-                "h": float(t_el.get("height", 0)),
-                "shape": t_el.get("type", "rectangle"),
-                "angle": float(t_el.get("angle", 0)),
-            }
-            sp = boundary_point(sn, tn, 1)
-            ep = boundary_point(tn, sn, -1)
-            a["x"], a["y"] = sp[0], sp[1]
-            a["points"] = [[0.0, 0.0], [ep[0] - sp[0], ep[1] - sp[1]]]
-            a["width"] = abs(ep[0] - sp[0])
-            a["height"] = abs(ep[1] - sp[1])
-            arrow_lbl = bound_labels.get(a["id"])
-            if arrow_lbl:
-                arrow_lbl["x"] = sp[0] + (ep[0] - sp[0]) / 2.0 - float(arrow_lbl.get("width", 0)) / 2.0
-                arrow_lbl["y"] = sp[1] + (ep[1] - sp[1]) / 2.0 - float(arrow_lbl.get("height", 0)) / 2.0
+    # Step 9: Recalculate Connector Endpoints via obstacle-aware orthogonal routing
+    from .routing import reroute_scene_arrows
+    reroute_scene_arrows(active, clearance=15.0)
 
     return document_or_elements
 

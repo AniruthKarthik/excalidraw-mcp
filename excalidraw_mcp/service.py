@@ -120,7 +120,18 @@ def _center_label(label, container):
     if container.get("customData", {}).get("type") in ("code_block", "code-block"):
         return
     if container["type"] == "arrow" and container.get("points"):
-        first, last = container["points"][0], container["points"][-1]
+        pts = container["points"]
+        if len(pts) > 2:
+            from .routing import position_connector_label
+            ax, ay = container.get("x", 0.0), container.get("y", 0.0)
+            world_pts = [(ax + float(p[0]), ay + float(p[1])) for p in pts]
+            lw = float(label.get("width", 80.0))
+            lh = float(label.get("height", 25.0))
+            lx, ly = position_connector_label(world_pts, lw, lh)
+            label["x"] = lx
+            label["y"] = ly
+            return
+        first, last = pts[0], pts[-1]
         cx = container["x"] + (first[0] + last[0]) / 2
         cy = container["y"] + (first[1] + last[1]) / 2
     else:
@@ -831,11 +842,51 @@ class SceneService:
                 "h": target["height"],
                 "angle": target.get("angle", 0),
             }
-            start, end = (
-                boundary_point(source_node, target_node, 1),
-                boundary_point(target_node, source_node, -1),
-            )
-            connector = arrow(*start, *end, elbowed=elbowed, **style)
+            if elbowed:
+                from .routing import route_orthogonal_connector
+
+                shapes = [
+                    e
+                    for e in index.values()
+                    if e["type"] in SHAPES
+                    and not e.get("isDeleted")
+                    and not (e.get("customData", {}).get("type") in ("code_block_header",))
+                ]
+                pair_arrows = [
+                    e
+                    for e in index.values()
+                    if e["type"] in ("arrow", "line")
+                    and not e.get("isDeleted")
+                    and {
+                        (e.get("startBinding") or {}).get("elementId"),
+                        (e.get("endBinding") or {}).get("elementId"),
+                    }
+                    == {source_id, target_id}
+                ]
+                slot_offset = len(pair_arrows) * 20.0
+                world_pts = route_orthogonal_connector(
+                    source,
+                    target,
+                    obstacles=shapes,
+                    clearance=15.0,
+                    s_offset=slot_offset,
+                    t_offset=slot_offset,
+                )
+                start = world_pts[0]
+                end = world_pts[-1]
+                origin_x, origin_y = world_pts[0]
+                connector = arrow(origin_x, origin_y, end[0], end[1], elbowed=True, **style)
+                connector["points"] = [[pt[0] - origin_x, pt[1] - origin_y] for pt in world_pts]
+                all_x = [pt[0] for pt in world_pts]
+                all_y = [pt[1] for pt in world_pts]
+                connector["width"] = max(all_x) - min(all_x)
+                connector["height"] = max(all_y) - min(all_y)
+            else:
+                start, end = (
+                    boundary_point(source_node, target_node, 1),
+                    boundary_point(target_node, source_node, -1),
+                )
+                connector = arrow(*start, *end, elbowed=elbowed, **style)
             connector["startBinding"] = {
                 "elementId": source_id,
                 "focus": 0,
@@ -1193,12 +1244,29 @@ class SceneService:
         return self.state.apply(apply_resolve)
 
     def check_geometry(self, min_gap: float = 30.0):
-        """Run geometric collision and frame containment diagnostics on current scene."""
+        """Run geometric collision, frame containment, and connector diagnostics on current scene."""
         from .layout import check_diagram_geometry
 
         doc, revision = self.state.snapshot()
         result = check_diagram_geometry(doc, min_gap=min_gap)
         return {"revision": revision, **result}
+
+    def reroute_connectors(
+        self, clearance: float = 15.0, lane_spacing: float = 24.0, only_elbowed: bool = False
+    ):
+        """Recalculate all connector paths and label positions with obstacle avoidance."""
+        from .routing import reroute_scene_arrows
+
+        def apply_reroute(document):
+            reroute_scene_arrows(
+                document["elements"],
+                clearance=clearance,
+                lane_spacing=lane_spacing,
+                only_elbowed=only_elbowed,
+            )
+            return {"status": "connectors rerouted", "revision": self.state.revision}
+
+        return self.state.apply(apply_reroute)
 
     def find_elements(
         self,
