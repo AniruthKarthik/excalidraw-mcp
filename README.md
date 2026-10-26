@@ -3,6 +3,7 @@
 > A high-performance, backend only Model Context Protocol (MCP) server for programmatically generating, editing, and managing Excalidraw v2 diagrams with obstacle aware arrow routing, font accurate text containment, and automated layout resolution.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![PyPI](https://img.shields.io/pypi/v/exca-mcp.svg)](https://pypi.org/project/exca-mcp/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-3.3%2B-green.svg)](https://github.com/jlowin/fastmcp)
 [![MCP Spec](https://img.shields.io/badge/MCP-1.27%2B-orange.svg)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -89,23 +90,41 @@ flowchart TD
 
 ## Quick Start
 
-Run instantly without cloning the repository or managing virtual environments using [`uvx`](https://docs.astral.sh/uv/):
+You can run the Excalidraw MCP server using either `uvx` (recommended) or `pip`.
+
+### Option 1: `uvx` (Recommended)
+
+Run the server instantly without cloning the repository or manually managing dependencies using [`uvx`](https://docs.astral.sh/uv/):
 
 ```bash
-uvx --from git+https://github.com/Dharshan2208/excalidraw-mcp.git excalidraw-mcp
+uvx exca-mcp
 ```
 
-Or install it globally to your FastMCP environment:
+> [!TIP]
+> **Why `uvx` is recommended:** `uvx exca-mcp` executes the published PyPI package in an isolated, ephemeral environment. It fetches all required dependencies automatically without modifying or polluting your system or project Python environment.
+
+### Option 2: `pip`
+
+You can also install `exca-mcp` from PyPI into your active Python environment:
 
 ```bash
-fastmcp install mcp.json
+pip install exca-mcp
 ```
+
+Once installed, run the server from the command line:
+
+```bash
+exca-mcp
+```
+
+> [NOTE]
+> When using `pip`, the package is installed into your current Python environment. When configuring your MCP client (such as Claude Desktop or Cursor), ensure that your environment's executable directory (e.g., `~/.local/bin`, virtual environment `bin/`, or Windows `Scripts/`) is in your system `PATH`, or provide the absolute path to the `exca-mcp` binary.
 
 ---
 
 ## Client Configuration
 
-Add `excalidraw-mcp` to your favorite MCP client configuration file:
+Add `exca-mcp` to your favorite MCP client configuration file:
 
 ### Claude Desktop
 Add this to `claude_desktop_config.json`:
@@ -113,34 +132,55 @@ Add this to `claude_desktop_config.json`:
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
+**Using `uvx` (Recommended):**
 ```json
 {
   "mcpServers": {
     "excalidraw": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
-        "excalidraw-mcp"
+        "exca-mcp"
       ]
     }
   }
 }
 ```
 
+**Using `pip` (Installed Executable):**
+```json
+{
+  "mcpServers": {
+    "excalidraw": {
+      "command": "exca-mcp"
+    }
+  }
+}
+```
+*(Note: If `exca-mcp` is not in your system `PATH`, provide the full absolute path, e.g. `/home/username/.venv/bin/exca-mcp` on macOS/Linux or `C:\\Users\\username\\.venv\\Scripts\\exca-mcp.exe` on Windows).*
+
 ### Cursor
 Add to `.cursor/mcp.json` in your project root or user configuration:
 
+**Using `uvx` (Recommended):**
 ```json
 {
   "mcpServers": {
     "excalidraw": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
-        "excalidraw-mcp"
+        "exca-mcp"
       ]
+    }
+  }
+}
+```
+
+**Using `pip` (Installed Executable):**
+```json
+{
+  "mcpServers": {
+    "excalidraw": {
+      "command": "exca-mcp"
     }
   }
 }
@@ -149,16 +189,26 @@ Add to `.cursor/mcp.json` in your project root or user configuration:
 ### OpenCode
 Add to `opencode.json` (or the MCP configuration section of your OpenCode settings):
 
+**Using `uvx` (Recommended):**
 ```json
 {
   "mcpServers": {
     "excalidraw": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
-        "excalidraw-mcp"
+        "exca-mcp"
       ]
+    }
+  }
+}
+```
+
+**Using `pip` (Installed Executable):**
+```json
+{
+  "mcpServers": {
+    "excalidraw": {
+      "command": "exca-mcp"
     }
   }
 }
@@ -167,16 +217,29 @@ Add to `opencode.json` (or the MCP configuration section of your OpenCode settin
 ### Codex / Generic Agent Configuration
 For CLI agents and runners accepting standard `mcpServers` JSON:
 
+**Using `uvx` (Recommended):**
 ```json
 {
   "mcpServers": {
     "excalidraw": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
-        "excalidraw-mcp"
+        "exca-mcp"
       ],
+      "env": {
+        "EXCALIDRAW_HISTORY_LIMIT": "25"
+      }
+    }
+  }
+}
+```
+
+**Using `pip` (Installed Executable):**
+```json
+{
+  "mcpServers": {
+    "excalidraw": {
+      "command": "exca-mcp",
       "env": {
         "EXCALIDRAW_HISTORY_LIMIT": "25"
       }
@@ -197,9 +260,7 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
     "excalidraw": {
       "command": "uvx",
       "args": [
-        "--from",
-        "git+https://github.com/Dharshan2208/excalidraw-mcp.git",
-        "excalidraw-mcp"
+        "exca-mcp"
       ]
     }
   }
@@ -337,6 +398,9 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+> [NOTE]
+> Installing in editable mode (`pip install -e .`) registers the local `exca-mcp` executable linked directly to the internal `excalidraw_mcp` Python module in your development environment.
+
 ### 2. Run the Test Suite
 
 The test suite contains **353 comprehensive unit and contract tests** verifying Excalidraw serialization, obstacle aware arrow routing, text containment and font metrics, two pass architecture layout, 8K dynamic scaling, storage safety, PNG export, code blocks, live server synchronization, sharing, and MCP schemas:
@@ -359,7 +423,19 @@ Or list discovered tools:
 uv run fastmcp list mcp.json
 ```
 
-### 4. Packaging Verification
+### 4. Running the Development Server Directly
+
+You can execute the development server locally via the installed CLI script or using the Python module directly:
+
+```bash
+# Using the installed script entry point:
+exca-mcp
+
+# Or directly using the Python module:
+python -m excalidraw_mcp.server
+```
+
+### 5. Packaging Verification
 
 Test source distribution and wheel generation with Hatchling:
 
