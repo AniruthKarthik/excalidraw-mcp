@@ -1,6 +1,6 @@
 # Excalidraw MCP Server
 
-> A high-performance, backend-only Model Context Protocol (MCP) server for programmatically generating, editing, and managing Excalidraw v2 diagrams with obstacle-aware arrow routing, font-accurate text containment, and automated layout resolution.
+> A high-performance, backend only Model Context Protocol (MCP) server for programmatically generating, editing, and managing Excalidraw v2 diagrams with obstacle aware arrow routing, font accurate text containment, and automated layout resolution.
 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-3.3%2B-green.svg)](https://github.com/jlowin/fastmcp)
@@ -14,23 +14,23 @@
 
 **Excalidraw MCP** empowers LLM agents (Claude, Cursor, OpenCode, Codex, and custom AI agents) to create, inspect, manipulate, and export rich [Excalidraw](https://excalidraw.com) diagrams directly from chat and automated workflows.
 
-Built on [FastMCP](https://github.com/jlowin/fastmcp) using **Hatchling** as the build backend, it runs entirely local via standard I/O (`stdio`). It requires no browser, no headless Chromium, and no third-party cloud hosting, rendering deterministic, production-grade `.excalidraw` (schema v2) documents safely and atomically.
+Built on [FastMCP](https://github.com/jlowin/fastmcp) using **Hatchling** as the build backend, it runs entirely local via standard I/O (`stdio`). It requires no browser, no headless Chromium, and no third party cloud hosting, rendering deterministic, production grade `.excalidraw` (schema v2) documents safely and atomically.
 
 ### Key Capabilities
 
-- **Obstacle-Aware Orthogonal Arrow Routing**: Manhattan A* corridor pathfinding routes connectors cleanly around intermediate boxes, frames, and text with configurable clearance ($15\text{px}$). Arrows attach perpendicularly to cardinal faces (top, bottom, left, right) on rectangles, diamonds, and ellipses, preventing clipped arrowheads and wire collisions.
-- **Multi-Edge Parallel Lanes**: Automatically routes multiple connectors between the same components into distinct, parallel tracks ($20\text{px}$ lane spacing) so arrows and labels never superimpose.
-- **Collision-Free Label Positioning**: Ranks corridor segments to position connector labels along the longest clear segment away from arrowheads and obstacle boxes.
-- **Font-Aware Text Containment**: Accurate FreeType/Pillow font measurement (supporting Excalifont, Helvetica, Cascadia, and Comic Shanns) automatically wraps text and expands shapes outward from center. Rhombus and ellipse bounding geometry ensures labels never escape container borders.
-- **Two-Pass Architecture Layout Engine**: Content-first sizing calculates text dimensions before positioning containers, automatically aligning multi-tier architectures (Main Stack, Side Columns, Banners) with zero overlaps.
-- **Dynamic 8K Canvas Scaling**: Content-aware export bounds calculate margins from all visible elements, generating crystal-clear high-resolution PNGs up to 8192px without downscaling or text truncation.
-- **Automated Geometry Diagnostics**: `check_diagram_geometry` automatically detects shape-to-shape overlaps, gap violations, frame containment escapes, and connector collisions.
-- **Mermaid & Architecture Shorthand**: Directly parse Mermaid flowcharts (`draw_mermaid`) or shorthand prompts (`draw_architecture`) into structured, fully-editable Excalidraw scenes.
-- **Syntax-Highlighted Code Blocks**: `add_code_block` renders syntax-highlighted code with line numbers, dark/light themes, and window controls.
-- **Interactive Live Canvas & WebSocket Sync**: Built-in HTTP and WebSocket server (`start_live_server`) synchronizes canvas changes with browser clients in real time.
-- **End-to-End Encrypted Sharing**: Client-side 128-bit AES-GCM encryption (`export_to_excalidraw_url`) publishes shareable links directly to excalidraw.com.
-- **Atomic Operations & In-Memory Undo**: Non-blocking transactions with process-local undo history (`undo`) and memory budgets.
-- **Automatic Agent Discovery**: Ships with a root `mcp.json` and `uvx` support for zero-config onboarding across modern AI coding environments.
+- **Obstacle Aware Orthogonal Arrow Routing**: Manhattan A* corridor pathfinding routes connectors cleanly around intermediate boxes, frames, and text with configurable clearance ($15\text{px}$). Arrows attach perpendicularly to cardinal faces (top, bottom, left, right) on rectangles, diamonds, and ellipses, preventing clipped arrowheads and wire collisions.
+- **Multi Edge Parallel Lanes**: Automatically routes multiple connectors between the same components into distinct, parallel tracks ($20\text{px}$ lane spacing) so arrows and labels never superimpose.
+- **Collision Free Label Positioning**: Ranks corridor segments to position connector labels along the longest clear segment away from arrowheads and obstacle boxes.
+- **Font Aware Text Containment**: Accurate FreeType/Pillow font measurement (supporting Excalifont, Helvetica, Cascadia, and Comic Shanns) automatically wraps text and expands shapes outward from center. Rhombus and ellipse bounding geometry ensures labels never escape container borders.
+- **Two Pass Architecture Layout Engine**: Content first sizing calculates text dimensions before positioning containers, automatically aligning multi tier architectures (Main Stack, Side Columns, Banners) with zero overlaps.
+- **Dynamic 8K Canvas Scaling**: Content aware export bounds calculate margins from all visible elements, generating crystal clear high resolution PNGs up to 8192px without downscaling or text truncation.
+- **Automated Geometry Diagnostics**: `check_diagram_geometry` automatically detects shape to shape overlaps, gap violations, frame containment escapes, and connector collisions.
+- **Mermaid & Architecture Shorthand**: Directly parse Mermaid flowcharts (`draw_mermaid`) or shorthand prompts (`draw_architecture`) into structured, fully editable Excalidraw scenes.
+- **Syntax Highlighted Code Blocks**: `add_code_block` renders syntax highlighted code with line numbers, dark/light themes, and window controls.
+- **Interactive Live Canvas & WebSocket Sync**: Built in HTTP and WebSocket server (`start_live_server`) synchronizes canvas changes with browser clients in real time.
+- **End-to-End Encrypted Sharing**: Client side 128 bit AES-GCM encryption (`export_to_excalidraw_url`) publishes shareable links directly to excalidraw.com.
+- **Atomic Operations & In-Memory Undo**: Non blocking transactions with process local undo history (`undo`) and memory budgets.
+- **Automatic Agent Discovery**: Ships with a root `mcp.json` and `uvx` support for zero config onboarding across modern AI coding environments.
 
 ---
 
@@ -81,9 +81,9 @@ flowchart TD
 
 ### Agent Workflow
 1. **Creation**: Agent invokes `draw_graph`, `draw_architecture`, `draw_mermaid`, or primitive shape tools (`add_rectangle`, `add_circle`, `connect`).
-2. **Layout & Routing**: Layout engine positions components into balanced tiers and routes connectors through obstacle-free corridors with parallel lane separation.
+2. **Layout & Routing**: Layout engine positions components into balanced tiers and routes connectors through obstacle free corridors with parallel lane separation.
 3. **Inspection & Revision**: Agent verifies element placement using `get_scene`, `get_element`, or `check_geometry`. If adjustments are needed, it calls `move`, `resize`, `update_element`, `reroute_connectors`, or `undo`.
-4. **Persistence or Export**: The scene is saved locally with `save(name="arch-v1")`, exported as a high-resolution image via `export_png` / `preview`, or published to excalidraw.com via `export_to_excalidraw_url`.
+4. **Persistence or Export**: The scene is saved locally with `save(name="arch-v1")`, exported as a high resolution image via `export_png` / `preview`, or published to excalidraw.com via `export_to_excalidraw_url`.
 
 ---
 
@@ -206,7 +206,7 @@ This repository comes pre-packaged with a root [`mcp.json`](mcp.json) descriptor
 }
 ```
 
-When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 46 tools with zero manual configuration.
+When an MCP compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) scans your workspace, it will automatically detect the server and register all 46 tools with zero manual configuration.
 
 ---
 
@@ -214,26 +214,26 @@ When an MCP-compliant agent tool (e.g. `fastmcp list mcp.json`, Cursor, or Zed) 
 
 The server exports 46 typed tools designed with strict JSON schema bounds and explicit safety hints (`readOnly`, `destructive`, `idempotent`).
 
-### 1. High-Level Generation & Design Guidance
+### 1. High Level Generation & Design Guidance
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, obstacle-aware edge routing, clustered frame grouping, and font-aware label wrapping. Returns stable logical-to-element ID mappings. |
+| `draw_graph` | `nodes: list[GraphNode]`<br>`edges: list[GraphEdge]`<br>`clusters: list[GraphCluster] = None`<br>`layout: str = "layered"` (`layered`, `horizontal`, `vertical`)<br>`direction: str = "horizontal"` (`horizontal`, `vertical`)<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ revision, element_count, node_map, edge_map, cluster_map }` | Replaces the scene with a structured diagram using automatic topological ranking, obstacle aware edge routing, clustered frame grouping, and font aware label wrapping. Returns stable logical to element ID mappings. |
 | `draw_mermaid` | `mermaid_code: str`<br>`direction: str | None = None`<br>`layout: str = "layered"`<br>`elbowed: bool = False`<br>`roundness: str | None = None` | `GraphResult`<br>`{ status, nodes, edges, node_map, edge_map, cluster_map, revision }` | Parses Mermaid flowchart/graph syntax (`graph TD`, `flowchart LR`, subgraphs, node shapes, edge styles) and renders directly to Excalidraw with automatic text containment. |
 | `draw_architecture` | `prompt: str` (e.g., `"box: Frontend, db: Postgres"`)<br>`wrap_threshold: int = 4`<br>Optional styles (`strokeColor`, `backgroundColor`, etc.) | `ArchitectureResult`<br>`{ revision, element_count, components }` | Rapid diagram generator parsing comma/newline-separated shorthand syntax (`box`, `circle`, `diamond`) with grid-wrapping and automatic obstacle-avoiding connectors. |
-| `read_diagram_guide` | `topic: str | None = None` (`layout`, `colors`, `typography`, `grouping`, `arrows`, `spacing`) | `DiagramGuideResult`<br>`{ topic, guide, available_topics }` | Practical diagram design guidelines covering 60-30-10 color rules, semantic palettes, standard node dimensions, margins, orthogonal arrow routing, and readability. |
+| `read_diagram_guide` | `topic: str | None = None` (`layout`, `colors`, `typography`, `grouping`, `arrows`, `spacing` ) | `DiagramGuideResult`<br>`{ topic, guide, available_topics }` | Practical diagram design guidelines covering 60-30-10 color rules, semantic palettes, standard node dimensions, margins, orthogonal arrow routing, and readability. |
 
 ### 2. Primitive Shapes, Text, Code Blocks & Frames
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
 | `add_rectangle` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `CreateResult`<br>`{ rectangle_id, label_id }` | Adds a rectangle to the active scene with an optional centered bound label, adaptive/round corner roundness, frame membership, and automatic outward expansion. |
-| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles + `frame_id: str = None` | `CreateResult`<br>`{ circle_id, label_id }` | Adds a circle (ellipse) with an optional centered bound label, ellipse-inscribed boundary containment, and frame membership. |
-| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `CreateResult`<br>`{ diamond_id, label_id }` | Adds a decision diamond with rhombus-inscribed boundary containment, adaptive roundness, and frame membership. |
-| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `CreateResult`<br>`{ arrow_id, label_id }` | Adds a directional arrow (straight or elbowed) with an optional corridor-positioned label. |
+| `add_circle` | `x: float`, `y: float`, `size: float`<br>`label: str = ""` + styles + `frame_id: str = None` | `CreateResult`<br>`{ circle_id, label_id }` | Adds a circle (ellipse) with an optional centered bound label, ellipse inscribed boundary containment, and frame membership. |
+| `add_diamond` | `x: float`, `y: float`, `w: float`, `h: float`<br>`label: str = ""` + styles + `roundness: str = None`, `frame_id: str = None` | `CreateResult`<br>`{ diamond_id, label_id }` | Adds a decision diamond with rhombus inscribed boundary containment, adaptive roundness, and frame membership. |
+| `add_arrow` | `x: float`, `y: float`, `x2: float`, `y2: float`<br>`label: str = ""` + styles + `elbowed: bool = False` | `CreateResult`<br>`{ arrow_id, label_id }` | Adds a directional arrow (straight or elbowed) with an optional corridor positioned label. |
 | `add_text` | `x: float`, `y: float`, `content: str`<br>`font_size: int = 20` + styles + `frame_id: str = None` | `CreateResult`<br>`{ text_id }` | Creates a standalone text element with accurate FreeType font metrics and optional frame membership. |
-| `add_code_block` | `code: str`<br>`language: str = "python"`<br>`x: float = 0`, `y: float = 0`<br>`title: str = None`<br>`theme: str = "dark"`<br>`font_size: int = 14`<br>`line_numbers: bool = True`<br>`w: float = None`, `h: float = None`<br>`frame_id: str = None` | `CodeBlockResult`<br>`{ status, container_id, text_id, width, height, revision }` | Adds a syntax-highlighted code block with window controls, configurable themes, line numbers, and monospace typography. |
-| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id }` | Binds two existing shapes with obstacle-aware orthogonal routing, cardinal face boundary docking, and multi-edge lane separation. |
+| `add_code_block` | `code: str`<br>`language: str = "python"`<br>`x: float = 0`, `y: float = 0`<br>`title: str = None`<br>`theme: str = "dark"`<br>`font_size: int = 14`<br>`line_numbers: bool = True`<br>`w: float = None`, `h: float = None`<br>`frame_id: str = None` | `CodeBlockResult`<br>`{ status, container_id, text_id, width, height, revision }` | Adds a syntax highlighted code block with window controls, configurable themes, line numbers, and monospace typography. |
+| `connect` | `source_id: str`, `target_id: str`<br>`label: str = ""` + styles + `elbowed: bool = False` | `ConnectResult`<br>`{ arrow_id, label_id }` | Binds two existing shapes with obstacle aware orthogonal routing, cardinal face boundary docking, and multi edge lane separation. |
 | `add_frame` | `name: str = ""`, `x: float`, `y: float`, `w: float`, `h: float`<br>`element_ids: list[str] = None` | `CreateResult`<br>`{ frame_id }` | Creates an Excalidraw frame container and optionally parents specified elements inside it. |
 
 ### 3. Scene Editing & Manipulation
@@ -243,7 +243,7 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 | `duplicate_elements` | `element_ids: list[str]`<br>`offset_x: float = 20.0`<br>`offset_y: float = 20.0` | `DuplicateResult`<br>`{ status, original_ids, duplicated_ids, id_mapping, revision }` | Duplicates multiple elements with spatial offsets, relationship remapping, arrow endpoint retargeting, bound label cloning, and group isolation. |
 | `move` | `element_id: str`, `x: float`, `y: float` | `MoveResult`<br>`{ status, element_id, x, y }` | Repositions an element. Moving a frame moves all contained elements; moving grouped elements moves group members together; rejects locked elements. |
 | `resize` | `element_id: str`, `width: float`, `height: float` | `ResizeResult`<br>`{ status, element_id, width, height }` | Resizes a shape or frame, recalculates label centering, and reroutes connected arrows; rejects locked elements. |
-| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ status, element_id, label_id }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment with automatic center-anchored container expansion. |
+| `update_element` | `element_id: str`<br>`label: str | None = None` + styles + `roundness`, `elbowed`, `frame_id` | `UpdateResult`<br>`{ status, element_id, label_id }` | Modifies an element's label, styling, roundness mode, elbowed connector routing, or frame assignment with automatic center anchored container expansion. |
 | `delete` | `element_id: str` | `DeleteResult`<br>`{ status, deleted_ids }` | Deletes an element and its bound label; unparents frame children if a frame is deleted; cleans up references in connected arrows; rejects locked elements. |
 | `group_elements` | `element_ids: list[str]` | `GroupResult`<br>`{ status, group_id, element_ids, revision }` | Groups multiple elements together so that movements and transformations apply cohesively. |
 | `ungroup_elements` | `element_ids: list[str] = None`<br>`group_id: str = None` | `UngroupResult`<br>`{ status, affected_elements, removed_group_ids, revision }` | Disbands an element group by `group_id` or removes outermost groups from specified elements. |
@@ -281,7 +281,7 @@ The server exports 46 typed tools designed with strict JSON schema bounds and ex
 
 | Tool | Inputs | Outputs | Description |
 |---|---|---|---|
-| `start_live_server` | `host: str = "127.0.0.1"`<br>`port: int = 8080` | `LiveServerResult`<br>`{ status, url, host, port }` | Launches the interactive browser-connected live canvas server with real-time WebSocket synchronization. |
+| `start_live_server` | `host: str = "127.0.0.1"`<br>`port: int = 8080` | `LiveServerResult`<br>`{ status, url, host, port }` | Launches the interactive browser connected live canvas server with real-time WebSocket synchronization. |
 | `stop_live_server` | None | `LiveServerResult`<br>`{ status }` | Gracefully shuts down the background live canvas server and closes active client connections. |
 | `get_live_server_status` | None | `LiveServerResult`<br>`{ is_running, url, host, port, active_clients }` | Reports operational status, connection URL, and connected client count of the live canvas server. |
 
@@ -299,7 +299,7 @@ Clients can directly read saved scenes into their context window without alterin
 
 ## Environment Variables & Configuration
 
-The server operates with secure defaults and zero required environment variables. Fine-tune performance and resource limits via the environment:
+The server operates with secure defaults and zero required environment variables. Fine tune performance and resource limits via the environment:
 
 | Variable | Default | Allowed Values | Description |
 |---|---|---|---|
@@ -339,7 +339,7 @@ pip install -e .
 
 ### 2. Run the Test Suite
 
-The test suite contains **353 comprehensive unit and contract tests** verifying Excalidraw serialization, obstacle-aware arrow routing, text containment and font metrics, two-pass architecture layout, 8K dynamic scaling, storage safety, PNG export, code blocks, live server synchronization, sharing, and MCP schemas:
+The test suite contains **353 comprehensive unit and contract tests** verifying Excalidraw serialization, obstacle aware arrow routing, text containment and font metrics, two pass architecture layout, 8K dynamic scaling, storage safety, PNG export, code blocks, live server synchronization, sharing, and MCP schemas:
 
 ```bash
 uv run --locked python -B -m unittest discover -s tests -v
@@ -376,7 +376,7 @@ Contributions are warmly welcomed! Please follow these guidelines:
 1. **Fork the Repository**: Create a descriptive feature branch (`git checkout -b feat/custom-styling`).
 2. **Adhere to Code Standards**: Ensure clean type annotations, preserve existing docstrings, and maintain standard exception hierarchies.
 3. **Verify Tests**: Run `uv run --locked python -B -m unittest discover -s tests -v` and ensure all 353 tests pass.
-4. **Compile Check**: Confirm no byte-compilation warnings via:
+4. **Compile Check**: Confirm no byte compilation warnings via:
    ```bash
    uv run python -B -m compileall -q -f main.py excalidraw_mcp tests
    ```
