@@ -437,7 +437,11 @@ class LiveCanvasServerTests(unittest.TestCase):
                     ]
                 }
             })
-            # Verify backend updated
+            # Verify backend updated (allow small async event propagation window)
+            for _ in range(30):
+                if self.service.state.all():
+                    break
+                time.sleep(0.01)
             self.assertEqual(self.service.state.all()[0]["id"], "ws-node")
 
     def test_service_live_server_lifecycle(self):
